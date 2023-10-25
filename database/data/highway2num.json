@@ -1,0 +1,15 @@
+{
+  "living_street": 1,
+  "motorway": 2,
+  "motorway_link": 3,
+  "primary": 4,
+  "primary_link": 5,
+  "residential": 6,
+  "road": 7,
+  "secondary": 8,
+  "secondary_link": 9,
+  "tertiary": 10,
+  "tertiary_link": 11,
+  "trunk": 12,
+  "trunk_link": 13
+}
