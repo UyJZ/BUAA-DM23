@@ -1,5 +1,6 @@
 import sys, os, pickle, argparse
 from random import shuffle
+import pandas as pd
 from utils import *
 try:
     from FPMC_numba import FPMC
@@ -7,6 +8,28 @@ except ImportError:
     from FPMC import FPMC
 
 cwd = os.path.dirname(os.path.realpath(__file__))
+
+
+allowed_trans = {}
+
+df = pd.read_csv(cwd + '/../database/data/rel.csv')
+
+for index, row in df.iterrows():
+    origin_id = int(row['origin_id'])
+    destination_id = int(row['destination_id'])
+
+    if origin_id not in allowed_trans:
+        allowed_trans[origin_id] = [destination_id]
+    else:
+        allowed_trans[origin_id].append(destination_id)
+    if destination_id not in allowed_trans:
+        allowed_trans[destination_id] = [origin_id]
+    else:
+        allowed_trans[destination_id].append(origin_id)
+        
+print('finish build graph')
+        
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -29,7 +52,7 @@ if __name__ == '__main__':
     te_data = data_list[split_idx:]
 
     fpmc = FPMC(n_user=max(user_set)+1, n_item=max(item_set)+1, 
-                n_factor=args.n_factor, learn_rate=args.learn_rate, regular=args.regular)
+                n_factor=args.n_factor, learn_rate=args.learn_rate, regular=args.regular, allowed_trans=allowed_trans)
     fpmc.user_set = user_set
     fpmc.item_set = item_set
     fpmc.init_model()

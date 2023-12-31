@@ -4,7 +4,7 @@ import numpy as np
 from utils import *
 
 class FPMC():
-    def __init__(self, n_user, n_item, n_factor, learn_rate, regular):
+    def __init__(self, n_user, n_item, n_factor, learn_rate, regular, allowed_trans):
         self.user_set = set()
         self.item_set = set()
 
@@ -14,6 +14,7 @@ class FPMC():
         self.n_factor = n_factor
         self.learn_rate = learn_rate
         self.regular = regular
+        self.allowed_trans = allowed_trans
 
     @staticmethod
     def dump(fpmcObj, fname):
@@ -34,12 +35,14 @@ class FPMC():
     def compute_x(self, u, i, b_tm1):
         acc_val = 0.0
         for l in b_tm1:
-            acc_val += np.dot(self.VIL[i], self.VLI[l])
+            if l in self.allowed_trans[u]:
+                acc_val += np.dot(self.VIL[i], self.VLI[l])
         return (np.dot(self.VUI[u], self.VIU[i]) + (acc_val/len(b_tm1)))
 
     def compute_x_batch(self, u, b_tm1):
         former = self.VUI_m_VIU[u]
-        latter = np.mean(self.VIL_m_VLI[:, b_tm1], axis=1).T
+        allowed_b_tm1 = [l for l in b_tm1 if l in self.allowed_trans[u]]  # 仅考虑允许的转移状态
+        latter = np.mean(self.VIL_m_VLI[:, allowed_b_tm1], axis=1).T
         return (former + latter)
 
     def evaluation(self, data_list):
@@ -68,13 +71,13 @@ class FPMC():
     def learn_epoch(self, tr_data, neg_batch_size):
         for iter_idx in range(len(tr_data)):
             (u, i, b_tm1) = random.choice(tr_data)
-            
+
             exclu_set = self.item_set - set([i])
-            j_list = random.sample(exclu_set, neg_batch_size)
-            
+            allowed_exclu_set = [l for l in exclu_set if l in self.allowed_trans[u]]  # 仅考虑允许的转移状态
+            j_list = random.sample(allowed_exclu_set, neg_batch_size)
+
             z1 = self.compute_x(u, i, b_tm1)
             for j in j_list:
-
                 z2 = self.compute_x(u, j, b_tm1)
                 delta = 1 - sigmoid(z1 - z2)
 
@@ -94,6 +97,7 @@ class FPMC():
                 self.VIL[i] += VILi_update
                 self.VIL[j] += VILj_update
                 self.VLI[b_tm1] += VLI_update
+                self.VLI[b_tm1] += VLI_update
 
     def learnSBPR_FPMC(self, tr_data, te_data=None, n_epoch=10, neg_batch_size=10, eval_per_epoch=False):
         for epoch in range(n_epoch):
@@ -101,7 +105,7 @@ class FPMC():
 
             if eval_per_epoch == True:
                 acc_in, mrr_in = self.evaluation(tr_data)
-                if te_data != None:
+                if te_data is not None:
                     acc_out, mrr_out = self.evaluation(te_data)
                     print ('In sample:%.4f\t%.4f \t Out sample:%.4f\t%.4f' % (acc_in, mrr_in, acc_out, mrr_out))
                 else:
@@ -111,13 +115,13 @@ class FPMC():
 
         if eval_per_epoch == False:
             acc_in, mrr_in = self.evaluation(tr_data)
-            if te_data != None:
+            if te_data is not None:
                 acc_out, mrr_out = self.evaluation(te_data)
                 print ('In sample:%.4f\t%.4f \t Out sample:%.4f\t%.4f' % (acc_in, mrr_in, acc_out, mrr_out))
             else:
                 print ('In sample:%.4f\t%.4f' % (acc_in, mrr_in))
 
-        if te_data != None:
+        if te_data is not None:
             return (acc_out, mrr_out)
         else:
             return None

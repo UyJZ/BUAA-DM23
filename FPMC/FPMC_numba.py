@@ -8,58 +8,59 @@ from utils import *
 import FPMC as FPMC_basic
 
 class FPMC(FPMC_basic.FPMC):
-    def __init__(self, n_user, n_item, n_factor, learn_rate, regular):
-        super(FPMC, self).__init__(n_user, n_item, n_factor, learn_rate, regular)
+    def __init__(self, n_user, n_item, n_factor, learn_rate, regular, allowed_trans):
+        super(FPMC, self).__init__(n_user, n_item, n_factor, learn_rate, regular, allowed_trans)
+        self.allowed_trans = allowed_trans
 
-    def evaluation(self, data_3_list):
-        np.dot(self.VUI, self.VIU.T, out=self.VUI_m_VIU)
-        np.dot(self.VIL, self.VLI.T, out=self.VIL_m_VLI)
-        acc, mrr = evaluation_jit(data_3_list[0], data_3_list[1], data_3_list[2], self.VUI_m_VIU, self.VIL_m_VLI)
-
-        return acc, mrr
+    def compute_x_jit(self, u, i, b_tm1, VUI, VIU, VLI, VIL):
+        acc_val = 0.0
+        for l in b_tm1:
+            if l in self.allowed_trans[u]:
+                acc_val += np.dot(VIL[i], VLI[l])
+        return (np.dot(VUI[u], VIU[i]) + (acc_val / len(b_tm1)))
 
     def learn_epoch(self, data_3_list, neg_batch_size):
         VUI, VIU, VLI, VIL = learn_epoch_jit(data_3_list[0], data_3_list[1], data_3_list[2], neg_batch_size,
                                              np.array(list(self.item_set)), self.VUI, self.VIU, self.VLI, self.VIL,
-                                             self.learn_rate, self.regular)
+                                             self.learn_rate, self.regular, self.allowed_trans)
         self.VUI = VUI
         self.VIU = VIU
         self.VLI = VLI
         self.VIL = VIL
 
-    def learnSBPR_FPMC(self, tr_data, te_data=None, n_epoch=10, neg_batch_size=10, eval_per_epoch=False, ret_in_score=False):
+    def learnSBPR_FPMC(self, tr_data, te_data=None, n_epoch=10, neg_batch_size=10, eval_per_epoch=False,
+                       ret_in_score=False):
         tr_3_list = data_to_3_list(tr_data)
-        if te_data != None:
+        if te_data is not None:
             te_3_list = data_to_3_list(te_data)
 
         for epoch in range(n_epoch):
 
             self.learn_epoch(tr_3_list, neg_batch_size)
 
-            if eval_per_epoch == True:
+            if eval_per_epoch:
                 acc_in, mrr_in = self.evaluation(tr_3_list)
-                if te_data != None:
+                if te_data is not None:
                     acc_out, mrr_out = self.evaluation(te_3_list)
-                    print ('In sample:%.4f\t%.4f \t Out sample:%.4f\t%.4f' % (acc_in, mrr_in, acc_out, mrr_out))
+                    print('In sample:%.4f\t%.4f \t Out sample:%.4f\t%.4f' % (acc_in, mrr_in, acc_out, mrr_out))
                 else:
-                    print ('In sample:%.4f\t%.4f' % (acc_in, mrr_in))
+                    print('In sample:%.4f\t%.4f' % (acc_in, mrr_in))
             else:
-                print ('epoch %d done' % epoch)
+                print('epoch %d done' % epoch)
 
-        if eval_per_epoch == False:
+        if not eval_per_epoch:
             acc_in, mrr_in = self.evaluation(tr_3_list)
-            if te_data != None:
+            if te_data is not None:
                 acc_out, mrr_out = self.evaluation(te_3_list)
-                print ('In sample:%.4f\t%.4f \t Out sample:%.4f\t%.4f' % (acc_in, mrr_in, acc_out, mrr_out))
+                print('In sample:%.4f\t%.4f \t Out sample:%.4f\t%.4f' % (acc_in, mrr_in, acc_out, mrr_out))
             else:
-                print ('In sample:%.4f\t%.4f' % (acc_in, mrr_in))
+                print('In sample:%.4f\t%.4f' % (acc_in, mrr_in))
 
-
-        if te_data != None:
+        if te_data is not None:
             if ret_in_score:
-                return (acc_in, mrr_in, acc_out, mrr_out)
+                return acc_in, mrr_in, acc_out, mrr_out
             else:
-                return (acc_out, mrr_out)
+                return acc_out, mrr_out
         else:
             return None
 
@@ -74,14 +75,14 @@ def compute_x_jit(u, i, b_tm1, VUI, VIU, VLI, VIL):
 
 
 @jit(nopython=True)
-def learn_epoch_jit(u_list, i_list, b_tm1_list, neg_batch_size, item_set, VUI, VIU, VLI, VIL, learn_rate, regular):
+def learn_epoch_jit(u_list, i_list, b_tm1_list, neg_batch_size, item_set, VUI, VIU, VLI, VIL, learn_rate, regular, allowed_trans):
     for iter_idx in range(len(u_list)):
         d_idx = np.random.randint(0, len(u_list))
         u = u_list[d_idx]
         i = i_list[d_idx]
-        b_tm1 = b_tm1_list[d_idx][b_tm1_list[d_idx]!=-1]
+        b_tm1 = b_tm1_list[d_idx][b_tm1_list[d_idx] != -1]
 
-        j_list = np.random.choice(item_set, size=neg_batch_size, replace=False)
+        j_list = np.random.choice(allowed_trans[u], size=neg_batch_size, replace=False)
 
         z1 = compute_x_jit(u, i, b_tm1, VUI, VIU, VLI, VIL)
         for j in j_list:
@@ -98,19 +99,22 @@ def learn_epoch_jit(u_list, i_list, b_tm1_list, neg_batch_size, item_set, VUI, V
 
             eta = np.zeros(VLI.shape[1])
             for l in b_tm1:
-                eta += VLI[l]
+                if l in allowed_trans[u]:
+                    eta += VLI[l]
             eta = eta / len(b_tm1)
 
             VILi_update = learn_rate * (delta * eta - regular * VIL[i])
             VILj_update = learn_rate * (-delta * eta - regular * VIL[j])
             VLI_updates = np.zeros((len(b_tm1), VLI.shape[1]))
             for idx, l in enumerate(b_tm1):
-                VLI_updates[idx] = learn_rate * ((delta * (VIL[i] - VIL[j]) / len(b_tm1)) - regular * VLI[l])
+                if l in allowed_trans[u]:
+                    VLI_updates[idx] = learn_rate * ((delta * (VIL[i] - VIL[j]) / len(b_tm1)) - regular * VLI[l])
 
             VIL[i] += VILi_update
             VIL[j] += VILj_update
             for idx, l in enumerate(b_tm1):
-                VLI[l] += VLI_updates[idx]
+                if l in allowed_trans[u]:
+                    VLI[l] += VLI_updates[idx]
 
     return VUI, VIU, VLI, VIL
 
