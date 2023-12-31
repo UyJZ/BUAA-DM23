@@ -9,9 +9,9 @@ data = os.path.join(cwd, '..', 'database', 'data')
 eta_path = os.path.join(cwd, '..', 'database', 'ETA')
 rel_path = os.path.join(data, 'rel.csv')
 
-proportion_train = 0.7
+proportion_train = 0.3
 proportion_val = 0.2
-proportion_test = 0.1
+proportion_test = 0.5
 
 
 def encode_onehot_sparse(labels):
@@ -25,9 +25,12 @@ def encode_onehot_sparse(labels):
 def encode_onehot(labels):
     # The classes must be sorted before encoding to enable static class encoding.
     # In other words, make sure the first class always maps to index 0.
-    classes = sorted(list(set(labels)))
-    classes_dict = {c: np.identity(len(classes))[i, :] for i, c in enumerate(classes)}
-    labels_onehot = np.array(list(map(classes_dict.get, labels)), dtype=np.int32)
+    #classes = sorted(list(set(labels)))
+    #classes_dict = {c: np.identity(len(classes))[i, :] for i, c in enumerate(classes)}
+    #labels_onehot = np.array(list(map(classes_dict.get, labels)), dtype=np.int32)
+    #return labels_onehot
+    unique_labels, encoded_labels = np.unique(labels, return_inverse=True)
+    labels_onehot = np.eye(len(unique_labels), dtype=np.int32)[encoded_labels]
     return labels_onehot
 
 
@@ -109,16 +112,20 @@ def load_data_sparse():
     return adj_coo, features_coo, labels, idx_train, idx_val, idx_test
 
 def load_data():
-    path = os.path.join(eta_path, 'road_features.csv')
+    path = os.path.join(eta_path, 'road_features_onehot.csv')
+    degree_path = os.path.join(data, 'degree.csv')
+    
+    df_degree = pd.read_csv(degree_path)
+    degrees = dict(zip(df_degree['id'], df_degree['degree']))
     print('Loading {} dataset...'.format(path))
-
+    
     # Load features and labels
     df = pd.read_csv(path)
-    df = df.sample(frac=0.02, random_state=42)
+    df = df.sample(frac=0.1, random_state=42)
+    idx_features_labels = df.values
     # Extract features excluding ID and coordinates
     features = sp.csr_matrix(df.iloc[:, 2:].values.astype(np.float32))
-    labels = encode_onehot(df['id'].values.astype(np.int32))
-    print('Success to build')
+    labels = encode_onehot(idx_features_labels[: , 0])
 
     edges_df = pd.read_csv(rel_path)
     edges = edges_df[['origin_id', 'destination_id']].values
@@ -128,15 +135,20 @@ def load_data():
     filter_condition = np.logical_and(np.isin(edges[:, 0], list(existing_nodes)),
                                        np.isin(edges[:, 1], list(existing_nodes)))
     edges = edges[filter_condition]
+    
+    edge_weights = [1.0 / (degrees[edge[0]] + degrees[edge[1]]) for edge in edges]
 
-    # Build graph adjacency matrix
-    adj = sp.coo_matrix((np.ones(edges.shape[0]), (edges[:, 0], edges[:, 1])),
-                        shape=(labels.shape[0], labels.shape[0]), dtype=np.float32)
+# 创建稀疏邻接矩阵，使用边权值
+    adj = sp.coo_matrix((edge_weights, (edges[:, 0], edges[:, 1])),
+                    shape=(labels.shape[0], labels.shape[0]), dtype=np.float32)
 
     # Build symmetric adjacency matrix
     adj = adj + adj.T.multiply(adj.T > adj) - adj.multiply(adj.T > adj)
+    
+    print(adj)
 
     # Normalize features and adjacency matrix
+    
     features = normalize_features(features)
     adj = normalize_adj(adj + sp.eye(adj.shape[0]))
     
@@ -150,6 +162,8 @@ def load_data():
     adj = torch.FloatTensor(np.array(adj.todense()))
     features = torch.FloatTensor(np.array(features.todense()))
     labels = torch.LongTensor(np.where(labels)[1])
+    
+    print(adj)
 
     idx_train = torch.LongTensor(idx_train)
     idx_val = torch.LongTensor(idx_val)
