@@ -1,0 +1,10 @@
+<OGRVRTDataSource>
+    <OGRVRTLayer name="road_for_fmm">
+        <SrcDataSource>road_for_fmm.csv</SrcDataSource>
+        <GeometryType>wkbLineString</GeometryType>
+        <Field name="id" src="id" />
+	<Field name="source" src="source" />
+	<Field name="target" src="target" />
+        <GeometryField encoding="WKT" field='WKT' > </GeometryField >
+    </OGRVRTLayer>
+</OGRVRTDataSource>

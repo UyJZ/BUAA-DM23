@@ -26,7 +26,7 @@ class TrajDatasetNoGraph(Dataset):
     def __len__(self):
         return self.size
     
-    def batch_generator(self, drop_last:bool = True):
+    def batch_generator(self, drop_last:bool = True, need_indices:bool = False):
         '''
         返回的都是np.ndarray
         [起点匹配点的位置，终点匹配点的位置] (ndarray, (3,)), \\
@@ -47,8 +47,22 @@ class TrajDatasetNoGraph(Dataset):
             start_speed = self.start_speed[indices]
             final_speed = self.final_speed[indices]
             road_ids = [self.traj_road_ids[i] for i in indices]
-            yield first_last_point, road_ids, times, start_speed, final_speed
+            if need_indices:
+                yield indices, first_last_point, road_ids, times, start_speed, final_speed
+            else:
+                yield first_last_point, road_ids, times, start_speed, final_speed
 
+    def iter_traj_by_order(self, num_trajs_each_iter):
+        i = 0
+        while i < self.size:
+            indices = range(i, i+num_trajs_each_iter if i+num_trajs_each_iter<=self.size else self.size)
+            first_last_point = self.first_final_matched_points[indices]
+            times = self.traj_time[indices]
+            start_speed = self.start_speed[indices]
+            final_speed = self.final_speed[indices]
+            road_ids = [self.traj_road_ids[i] for i in indices]
+            i += num_trajs_each_iter
+            yield first_last_point, road_ids, times, start_speed, final_speed
     
     def __getitem__(self, index):
         '''

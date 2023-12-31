@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<config>
+  <input>
+    <ubodt>
+      <file>./ubodt.txt</file>
+    </ubodt>
+    <network>
+      <file>./road.shp</file>
+      <id>id</id>
+    </network>
+    <gps>
+      <file>./traj_for_fmm.shp</file>
+      <id>id</id>
+      <geom>geom</geom>
+    </gps>
+  </input>
+  <parameters>
+    <k>4</k>
+    <r>0.4</r>
+    <pf>0</pf>
+    <gps_error>0.5</gps_error>
+  </parameters>
+  <output>
+    <fields>
+        <all/>
+    </fields>
+    <file>fmm_all_fields.csv</file>
+  </output>
+  <other>
+    <use_omp/>
+  </other>
+</config>

@@ -15,7 +15,7 @@ from Utils import *
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-trajSet = TrajDatasetNoGraph("ETA/traj_data_eval.pkl", 8)
+trajSet = TrajDatasetNoGraph("ETA/traj_data_train.pkl", 8)
 rawroadfeat = RoadFeatures("ETA/road_features_with_lengths.pkl", "database/data/road.csv")
 
 is_training = False
@@ -143,5 +143,5 @@ else:
     print(std)
 
     # 保存ret_table.
-    #df = pd.DataFrame(ret_table,columns=["label time", "predicted time"])
-    #df.to_csv("ETA/test.csv", sep=',', index=False)
+    df = pd.DataFrame(ret_table,columns=["label time", "predicted time"])
+    df.to_csv("ETA/GRUonly_result/train.csv", sep=',', index=False)

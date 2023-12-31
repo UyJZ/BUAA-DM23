@@ -1,0 +1,8 @@
+<OGRVRTDataSource>
+    <OGRVRTLayer name="jump_for_fmm">
+        <SrcDataSource>jump_for_fmm.csv</SrcDataSource>
+        <GeometryType>wkbLineString</GeometryType>
+        <Field name="id" src="id" />
+        <GeometryField encoding="WKT" field='geom' > </GeometryField >
+    </OGRVRTLayer>
+</OGRVRTDataSource>
