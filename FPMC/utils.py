@@ -56,3 +56,16 @@ def data_to_3_list(data_list):
     b_tm1_list = np.array(b_tm1_list)
     
     return (u_list, i_list, b_tm1_list)
+
+
+def load_jump_task_from(filename):
+    data_list = []
+    with open(filename, 'r') as f:
+        for l in f:
+            l = [int(s) for s in l.strip().split()]
+            user = l[0]
+            b_tm1 = list(set(l[1:-1]))
+            label = l[-1]
+
+            data_list.append((user, label, b_tm1))
+    return data_list

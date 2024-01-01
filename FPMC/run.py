@@ -23,11 +23,9 @@ for index, row in df.iterrows():
     destination_id = int(row['destination_id'])
 
     if origin_id not in allowed_trans:
-        allowed_trans[origin_id] = [origin_id]    
-    allowed_trans[origin_id].append(destination_id)
-    if destination_id not in allowed_trans:
-        allowed_trans[destination_id] = [destination_id]
-    allowed_trans[destination_id].append(origin_id)
+        allowed_trans[origin_id] = [origin_id]
+    if destination_id != origin_id and destination_id not in allowed_trans[origin_id]:
+        allowed_trans[origin_id].append(destination_id)
     
 # 这是为了防止之后出现一些空数组
 for i in range(n_road + 1):
@@ -38,7 +36,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('input_dir', help='The directory of input', type=str)
     parser.add_argument('-e', '--n_epoch', help='# of epoch', type=int, default=15)
-    parser.add_argument('--n_neg', help='# of neg samples', type=int, default=10)
+    parser.add_argument('--n_neg', help='# of neg samples', type=int, default=15)
     parser.add_argument('-n', '--n_factor', help='dimension of factorization', type=int, default=32)
     parser.add_argument('-l', '--learn_rate', help='learning rate', type=float, default=0.01)
     parser.add_argument('-r', '--regular', help='regularization', type=float, default=0.001)
@@ -52,6 +50,7 @@ if __name__ == '__main__':
     train_ratio = 0.8
     split_idx = int(len(data_list) * train_ratio)
     tr_data = data_list[:split_idx]
+    # print(tr_data)
     te_data = data_list[split_idx:]
 
     fpmc = FPMC(n_user=max(user_set)+1, n_item=max(item_set)+1, 
@@ -64,6 +63,8 @@ if __name__ == '__main__':
                                    neg_batch_size=args.n_neg, eval_per_epoch=False)
 
     print ("Accuracy:%.2f MRR:%.2f" % (acc, mrr))
+    
+    fpmc.dump(fpmcObj=fpmc,fname=cwd+'/model.pkl')
 
 
 
