@@ -1,5 +1,6 @@
 import csv, math
 import numpy as np
+# 这部分不需要修改
 
 def sigmoid(x):
     if x >= 0:

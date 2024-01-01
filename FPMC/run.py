@@ -2,15 +2,19 @@ import sys, os, pickle, argparse
 from random import shuffle
 import pandas as pd
 from utils import *
-try:
-    from FPMC_numba import FPMC
-except ImportError:
-    from FPMC import FPMC
+#try:
+#    from FPMC_numba import FPMC
+#except ImportError:
+#    from FPMC import FPMC
+from FPMC import FPMC
+# numba版本的应该更快，但是暂时还没调好，先用普通版本的
 
 cwd = os.path.dirname(os.path.realpath(__file__))
 
 
 allowed_trans = {}
+
+n_road = 38026
 
 df = pd.read_csv(cwd + '/../database/data/rel.csv')
 
@@ -19,17 +23,16 @@ for index, row in df.iterrows():
     destination_id = int(row['destination_id'])
 
     if origin_id not in allowed_trans:
-        allowed_trans[origin_id] = [destination_id]
-    else:
-        allowed_trans[origin_id].append(destination_id)
+        allowed_trans[origin_id] = [origin_id]    
+    allowed_trans[origin_id].append(destination_id)
     if destination_id not in allowed_trans:
-        allowed_trans[destination_id] = [origin_id]
-    else:
-        allowed_trans[destination_id].append(origin_id)
-        
-print('finish build graph')
-        
-
+        allowed_trans[destination_id] = [destination_id]
+    allowed_trans[destination_id].append(origin_id)
+    
+# 这是为了防止之后出现一些空数组
+for i in range(n_road + 1):
+    if i not in allowed_trans:
+        allowed_trans[i] = [i]
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
