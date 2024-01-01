@@ -16,7 +16,7 @@ from Utils import *
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-trajSet = TrajDatasetNoGraph("ETA/traj_data_eval.pkl", 8)
+trajSet = TrajDatasetNoGraph("ETA/traj_data_train.pkl", 8)
 rawroadfeat = RoadFeatures("ETA/road_features_with_lengths.pkl", "database/data/road.csv")
 
 is_training = False

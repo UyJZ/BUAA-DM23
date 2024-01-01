@@ -1,6 +1,7 @@
 import numpy as np
 import torch
-from Dataset import RoadFeatures
+from Dataset import RoadFeatures, TrajDatasetNoGraph
+#from GRU import GRUmodel, GRUBoosting
 
 def prepare_sequential_packed_features(road_feat: RoadFeatures, road_ids: list[np.ndarray]):
     '''
@@ -80,4 +81,26 @@ def get_positional_encoding(x, hidden_size):
 
     ret[:,0::2] = torch.sin(inner[:,0::2])
     ret[:,1::2] = torch.cos(inner[:,0::2])
+    return ret
+
+
+def predict_all_trajs(trajSet: TrajDatasetNoGraph, model, rawroadfeat:RoadFeatures, label:torch.Tensor = None):
+    '''
+    返回(len(trajSet), 2)，[:,0]是label, [:,1]是预测值. 如果没有提供label, 就用trajSet中的 duration, 即轨迹的真实时间
+    '''
+    l = 0
+    b = 8
+    with torch.no_grad():
+        ret = torch.zeros((len(trajSet), 2), dtype=torch.float32).to(model.device)
+        for traj_info, road_ids, duration, start_speed, final_speed in trajSet.iter_traj_by_order(b):
+            try:
+                t = model.predict(road_ids, traj_info, start_speed, rawroadfeat)
+            except:
+                t = model.predict(road_ids, start_speed, rawroadfeat)
+            if label is not None:
+                ret[l:l+b,0] = label[l:l+b]
+            else:
+                ret[l:l+b,0] = torch.tensor(duration).to(model.device)
+            ret[l:l+b,1] = t
+            l += start_speed.shape[0]    
     return ret

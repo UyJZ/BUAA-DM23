@@ -11,7 +11,7 @@ class TrajDatasetNoGraph(Dataset):
     '''
     暂时不考虑GNN的Traj数据集，路段的编码暂时直接用原始编码.
     '''
-    def __init__(self, path, minibatchsize) -> None:
+    def __init__(self, path, minibatchsize, n_bootstraps:int = None) -> None:
         super().__init__()
         with open(path, "rb") as f:
             self.traj_data = pickle.load(f)  # a list of tuple
@@ -22,11 +22,15 @@ class TrajDatasetNoGraph(Dataset):
         self.start_speed = np.array(list(map(lambda x: np.float32(x[3]), self.traj_data)), dtype=np.float32)
         self.final_speed = np.array(list(map(lambda x: np.float32(x[4]), self.traj_data)), dtype=np.float32)
         self.batchsize = minibatchsize
+
+        if n_bootstraps is not None:
+            self.bootstrap_samples = [np.random.choice(self.size, self.size) for _ in range(n_bootstraps)]   # 这里存放的是indices
+            
         
     def __len__(self):
         return self.size
     
-    def batch_generator(self, drop_last:bool = True, need_indices:bool = False):
+    def batch_generator(self, drop_last:bool = True, need_indices:bool = False, bootstrap_id:int = None):
         '''
         返回的都是np.ndarray
         [起点匹配点的位置，终点匹配点的位置] (ndarray, (3,)), \\
@@ -42,6 +46,8 @@ class TrajDatasetNoGraph(Dataset):
             drop_last=drop_last
         )
         for indices in sampler:
+            if bootstrap_id is not None:
+                indices = self.bootstrap_samples[bootstrap_id][indices]
             first_last_point = self.first_final_matched_points[indices]
             times = self.traj_time[indices]
             start_speed = self.start_speed[indices]
