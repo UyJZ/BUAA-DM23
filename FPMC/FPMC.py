@@ -85,10 +85,17 @@ class FPMC():
         #return (np.dot(self.VUI[u], self.VIU[i]) + (acc_val/len(b_tm1)))
         acc_val = 0.0
         for l in b_tm1:
-            # 检查 l 是否是项目 i 的可能下一个状态
             if l in self.allowed_trans[i]:
                 acc_val += np.dot(self.VIL[i], self.VLI[l])
         return (np.dot(self.VUI[u], self.VIU[i]) + (acc_val / len(b_tm1)))
+        #user_embedding = self.VUI[u]
+        #current_item_embedding = self.VIU[i]
+        #allowed_b_tm1 = [l for l in b_tm1 if l in self.allowed_trans[i]]
+        # 计算当前项目到下一个项目的转移嵌入向量（假设转移嵌入矩阵为 VIL）
+        #transition_embedding = np.mean([self.VIL[l] for l in allowed_b_tm1], axis=0)
+        # 计算用户对当前项目到下一个项目的兴趣分数
+        #score = np.dot(user_embedding, current_item_embedding) + np.dot(current_item_embedding, transition_embedding)
+        #return score
 
     def compute_x_batch(self, u, b_tm1):
         """
@@ -122,10 +129,16 @@ class FPMC():
         #latter = np.mean(self.VIL_m_VLI[:, list(possible_transitions_set)], axis=1).T
         #return (former + latter)
         former = self.VUI_m_VIU[u]
-        current_state = b_tm1[-1]
-        allowed_transitions = self.allowed_trans[current_state]
-        allowed_b_tm1 = [l for l in b_tm1 if l in allowed_transitions]
+        try:
+            current_state = b_tm1[-1]
+            allowed_transitions = self.allowed_trans[current_state]
+            allowed_b_tm1 = [l for l in b_tm1 if l in allowed_transitions]
+        except:
+            allowed_b_tm1 = list(range(len(self.allowed_trans)))
+        
         latter = np.mean(self.VIL_m_VLI[:, allowed_b_tm1], axis=1).T
+        # latter[~np.isin(range(len(self.VIL_m_VLI)), allowed_b_tm1)] = -1
+
         return (former + latter)
 
 
@@ -208,24 +221,34 @@ class FPMC():
         correct_count = 0
         rr_sum = 0.0
 
-        for (u, i, b_tm1) in tqdm(data_list, desc="Evaluating", unit="tuple", leave=False):
-            scores = self.compute_x_batch(u, b_tm1)
+        return_result = []
 
-            i_score = scores[i]
-            ranks = np.argsort(scores)[::-1]
-            rank = np.where(ranks == i)[0][0] + 1
+        for (u, i, b_tm1, traj_id) in tqdm(data_list, desc="Evaluating", unit="tuple", leave=False):
+            scores = self.compute_x_batch(u, b_tm1)
+            if i == 6777:
+                print(b_tm1)
+            # ranks = np.argsort(scores)[::-1]
+            rank = len(np.where(scores > scores[i])[0]) + 1
+            # print(len(scores))
             rr = 1.0 / rank
             rr_sum += rr
+            s = self.allowed_trans[b_tm1[-1]]
+            separator = ';'
+            str2 = separator.join(str(num) for num in s)
 
-            if i_score == np.max(scores):
+            str1 = "entity_id: " + str(u) + " traj_id: " + str(traj_id) + " expected: " + str(i) + " predict: " + str(s[scores[s].argmax()]) + ' current status: ' + str(b_tm1[-1]) + ' allowed_status: ' + str2 + '\n'
+            return_result.append(str1)
+            
+            
+            if i == s[scores[s].argmax()]:
                 correct_count += 1
 
         try:
             acc = correct_count / len(data_list)
             mrr = rr_sum / len(data_list)
-            return (acc, mrr)
+            return (acc, mrr,return_result)
         except ZeroDivisionError:
-            return (0.0, 0.0)
+            return (0.0, 0.0,return_result)
 
 
     def learn_epoch(self, tr_data, neg_batch_size):
@@ -237,7 +260,7 @@ class FPMC():
         - neg_batch_size: 负样本批次大小
         """
         for iter_idx in range(len(tr_data)):
-            (u, i, b_tm1) = random.choice(tr_data)
+            (u, i, b_tm1, traj_id) = random.choice(tr_data)
             #print('u : ', u)
             #print('allowed_exclu_set :' ,allowed_exclu_set)
             #print('neg_batch_size :', neg_batch_size)        
@@ -247,12 +270,17 @@ class FPMC():
                 # 处理 neg_batch_size 大于可用集合的情况
             #    j_list = random.sample(self.allowed_trans[u], len(self.allowed_trans[u]))
             # 从最新状态的可达状态中选择负样本
-            latest_state = i
-            if len(self.allowed_trans[latest_state]) >= neg_batch_size:
-                j_list = random.sample(self.allowed_trans[latest_state], neg_batch_size)
+            try:
+                latest_state = b_tm1[-1]
+                s = self.allowed_trans[latest_state]
+            except:
+                s = list(range(len(self.allowed_trans)))
+            if len(s) >= neg_batch_size:
+                j_list = random.sample(s, neg_batch_size)
             else:
-                j_list = random.sample(self.allowed_trans[latest_state], len(self.allowed_trans[latest_state]))
-            
+                j_list = random.sample(s, len(s))
+            if i in j_list:
+                j_list.remove(i)
             z1 = self.compute_x(u, i, b_tm1)
             for j in j_list:
                 z2 = self.compute_x(u, j, b_tm1)
@@ -345,9 +373,9 @@ class FPMC():
             self.learn_epoch(tr_data, neg_batch_size=neg_batch_size)
 
             if eval_per_epoch == True:
-                acc_in, mrr_in = self.evaluation(tr_data)
+                acc_in, mrr_in, _ = self.evaluation(tr_data)
                 if te_data is not None:
-                    acc_out, mrr_out = self.evaluation(te_data)
+                    acc_out, mrr_out, _ = self.evaluation(te_data)
                     print ('In sample:%.4f\t%.4f \t Out sample:%.4f\t%.4f' % (acc_in, mrr_in, acc_out, mrr_out))
                 else:
                     print ('In sample:%.4f\t%.4f' % (acc_in, mrr_in))
@@ -356,9 +384,17 @@ class FPMC():
 
         if eval_per_epoch == False:
             print('evaluating~~~~')
-            acc_in, mrr_in = self.evaluation(tr_data)
+            acc_in, mrr_in, return_result = self.evaluation(tr_data)
+            with open("tr.txt",'w') as f :
+                for str1 in return_result:
+                    f.write(str1)
+                f.close()
             if te_data is not None:
-                acc_out, mrr_out = self.evaluation(te_data)
+                acc_out, mrr_out, return_result = self.evaluation(te_data)
+                with open("te.txt",'w') as f :
+                    for str1 in return_result:
+                        f.write(str1)
+                    f.close()
                 print ('In sample:%.4f\t%.4f \t Out sample:%.4f\t%.4f' % (acc_in, mrr_in, acc_out, mrr_out))
             else:
                 print ('In sample:%.4f\t%.4f' % (acc_in, mrr_in))
