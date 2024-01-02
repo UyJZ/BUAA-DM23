@@ -20,10 +20,11 @@ def load_data_from_dir(dirname):
         for l in f:
             l = [int(s) for s in l.strip().split()]
             user = l[0]
-            b_tm1 = list(set(l[1:-1]))
+            traj_id = l[1]
+            b_tm1 = list((l[2:-1]))
             label = l[-1]
 
-            data_list.append((user, label, b_tm1))
+            data_list.append((user, label, b_tm1,traj_id))
     
     return data_list, user_set, item_set    
 
@@ -64,8 +65,8 @@ def load_jump_task_from(filename):
         for l in f:
             l = [int(s) for s in l.strip().split()]
             user = l[0]
-            b_tm1 = list(set(l[1:-1]))
-            label = l[-1]
+            traj_id = l[1]
+            b_tm1 = list(l[2:])
 
-            data_list.append((user, label, b_tm1))
+            data_list.append((user, b_tm1, traj_id))
     return data_list

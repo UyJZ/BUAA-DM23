@@ -36,22 +36,28 @@ num = len(data_list) # 预测的数量默认为data_list的总数量，想要少
 
 for i in range(num):
     l = data_list[i]
-    u, i, b_tm1 = l
+    u, b_tm1, traj_id = l
     current_status = b_tm1[-1]
     res = -np.inf
     best_path = []
+    score = model.compute_x_batch(u, b_tm1)
     print('current_status : .{}'.format(current_status))
+    print('current path : ', b_tm1)
+    if current_status == 24123:
+        print('here')
+    best_path = list(b_tm1)
+    best_path.append(current_status)
     for best_choice in allowed_trans[current_status]:
         if best_choice == b_tm1[-1]:
             continue
         road = list(b_tm1)
         #road.append(best_choice)
-        r = model.compute_x(u=u, b_tm1=road, i=best_choice)
+        r = score[best_choice]
         if r > res:
             road.append(best_choice)
             best_path = road
             res = r
-    print('最佳预测为.{}'.format(best_path[-1]))
     print('路径为: .{} '.format(best_path))
+    print('最佳预测为.{}'.format(best_path[-1]))
         
         

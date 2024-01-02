@@ -35,10 +35,10 @@ for i in range(n_road + 1):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('input_dir', help='The directory of input', type=str)
-    parser.add_argument('-e', '--n_epoch', help='# of epoch', type=int, default=15)
+    parser.add_argument('-e', '--n_epoch', help='# of epoch', type=int, default=20)
     parser.add_argument('--n_neg', help='# of neg samples', type=int, default=15)
     parser.add_argument('-n', '--n_factor', help='dimension of factorization', type=int, default=32)
-    parser.add_argument('-l', '--learn_rate', help='learning rate', type=float, default=0.01)
+    parser.add_argument('-l', '--learn_rate', help='learning rate', type=float, default=0.02)
     parser.add_argument('-r', '--regular', help='regularization', type=float, default=0.001)
     args = parser.parse_args()
     
