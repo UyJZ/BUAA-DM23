@@ -46,17 +46,18 @@ def prepare_road_lengths(road_feat: RoadFeatures, road_ids: list[np.ndarray], st
     for i in range(N):
         ids = road_ids[i]
         l = len(ids)
-        if l==1:
-            # 起点终点在同一条路上.. 暂时直接用起点终点直线距离吧..虽然路段中有折线所以这样不对，但因为路段都比较短所以还好..?
-            dist = computeApproxDistFromCoord(start_matched_point, final_matched_point)  # 单位m.
-            lengths[0,i,0] = dist
-        else:
-            this_sequence_lengths = road_feat.getRoadLength(ids)  # 1维
-            end_of_first_road = road_feat.getRoadTarget(ids[0])  # 1维
-            start_of_last_road= road_feat.getRoadOrigin(ids[-1]) # 1维
-            this_sequence_lengths[0] = computeApproxDistFromCoord(start_matched_point, end_of_first_road)
-            this_sequence_lengths[-1]= computeApproxDistFromCoord(final_matched_point, start_of_last_road)
-            lengths[:l,i,0] = this_sequence_lengths
+        if start_matched_point is not None and final_matched_point is not None:
+            if l==1:
+                # 起点终点在同一条路上.. 暂时直接用起点终点直线距离吧..虽然路段中有折线所以这样不对，但因为路段都比较短所以还好..?
+                dist = computeApproxDistFromCoord(start_matched_point, final_matched_point)  # 单位m.
+                lengths[0,i,0] = dist
+            else:
+                this_sequence_lengths = road_feat.getRoadLength(ids)  # 1维
+                end_of_first_road = road_feat.getRoadTarget(ids[0])  # 1维
+                start_of_last_road= road_feat.getRoadOrigin(ids[-1]) # 1维
+                this_sequence_lengths[0] = computeApproxDistFromCoord(start_matched_point, end_of_first_road)
+                this_sequence_lengths[-1]= computeApproxDistFromCoord(final_matched_point, start_of_last_road)
+                lengths[:l,i,0] = this_sequence_lengths
     return torch.from_numpy(lengths)
 
 

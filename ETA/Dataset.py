@@ -126,3 +126,46 @@ class RoadFeatures:
         路段的终点坐标，结果是ndarray, 如果idx是数组，结果也是二维的；如果只是一个数，则结果是一维的.
         '''
         return self.road_end_coord[idx]
+    
+
+class ETATaskData(Dataset):
+    def __init__(self, schedule_path, task_path, minibatchsize) -> None:
+        super().__init__()
+        schedule_df = pd.read_csv(schedule_path)
+        # schedule_df = schedule_df.sort_values(by="t", ascending=True)
+        self.road_ids = [ast.literal_eval(r[1][2]) for r in schedule_df.iterrows()]   # 注意iterrows()的结果是一个元组，第一项是idx!
+        self.tids = np.array(schedule_df['t'], dtype=np.int32)
+        paths = [ast.literal_eval(r[1][1]) for r in schedule_df.iterrows()]
+        self.start_end_matched_points = np.array(list(map(lambda x: [x[0],x[-1]], paths)), dtype=np.float32)
+
+
+        task_df = pd.read_csv(task_path)
+        self.size = len(task_df) // 2
+        start_info_df = task_df[task_df.index%2==0]  # 只保留起点那一行. 但是没有matched point.
+        self.start_speeds = np.array(start_info_df['speeds'], dtype=np.float32)
+        #end_info_df = task_df[task_df.index%2==1]    # 终点那一行.
+        
+        self.minibatchsize = minibatchsize
+
+    def __len__(self):
+        return self.size
+
+    def iter_by_order(self):
+        i = 0
+        while i < self.size:
+            indices = []
+            roadids = []
+            l = 0
+            while l<self.minibatchsize and i<self.size:
+                if len(self.road_ids[i]) != 0:
+                    indices.append(i)
+                    roadids.append(self.road_ids[i])
+                    l+=1
+                i += 1
+            if l!=0:
+                tids = self.tids[indices]
+                start_end_points = self.start_end_matched_points[indices]
+                start_speeds = self.start_speeds[indices]
+                yield tids, roadids, tids, start_end_points, start_speeds
+            else:
+                break
