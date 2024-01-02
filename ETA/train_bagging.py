@@ -20,7 +20,7 @@ is_training = False
 #nbags = 8
 nbags = 6   # 筛选出来6个
 
-trajSet = TrajDatasetNoGraph("ETA/traj_data_train.pkl", 8, nbags) if is_training else TrajDatasetNoGraph("ETA/traj_data_train.pkl", 8)
+trajSet = TrajDatasetNoGraph("ETA/traj_data_eval.pkl", 8, nbags) if is_training else TrajDatasetNoGraph("ETA/traj_data_eval.pkl", 8)
 rawroadfeat = RoadFeatures("ETA/road_features_with_lengths.pkl", "database/data/road.csv")
 base_bagging_dir = "ETA/GRUBagging"
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -68,4 +68,4 @@ else:
     ret1[:,1] = np.clip(ret1[:,1] + ret2[:,1], 2, 1000)
     
     df = pd.DataFrame(ret1, columns=["label time", "predicted time"])
-    df.to_csv(os.path.join(base_bagging_dir, "ret_train.csv"))
+    df.to_csv(os.path.join(base_bagging_dir, "ret_eval.csv"))
