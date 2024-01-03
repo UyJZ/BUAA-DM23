@@ -3,6 +3,7 @@ from utils import load_jump_task_from
 from FPMC import FPMC
 import pandas as pd
 import numpy as np
+import csv
 
 cwd = os.path.dirname(os.path.realpath(__file__))
 
@@ -34,30 +35,256 @@ for i in range(n_road + 1):
         
 num = len(data_list) # 预测的数量默认为data_list的总数量，想要少点的话可以自己改
 
-for i in range(num):
-    l = data_list[i]
-    u, b_tm1, traj_id = l
-    current_status = b_tm1[-1]
-    res = -np.inf
-    best_path = []
-    score = model.compute_x_batch(u, b_tm1)
-    print('current_status : .{}'.format(current_status))
-    print('current path : ', b_tm1)
-    if current_status == 24123:
-        print('here')
-    best_path = list(b_tm1)
-    best_path.append(current_status)
-    for best_choice in allowed_trans[current_status]:
-        if best_choice == b_tm1[-1]:
+
+predict_data = {} # (entity_id,traj_id) => (current_status,predict_status)
+with open("predict.txt","w") as f:
+    with open("predict_task.txt","w") as f2:
+        for i in range(num):
+            l = data_list[i]
+            u, b_tm1, traj_id = l
+            current_status = b_tm1[-1]
+            res = -np.inf
+            best_path = []
+            score = model.compute_x_batch(u, b_tm1)
+            # print('current_status : .{}'.format(current_status))
+            # print('current path : ', b_tm1)
+            # if current_status == 24123:
+            #     print('here')
+            best_path = list(b_tm1)
+            best_path.append(current_status)
+            for best_choice in allowed_trans[current_status]:
+                if best_choice == b_tm1[-1]:
+                    continue
+                road = list(b_tm1)
+                #road.append(best_choice)
+                r = score[best_choice]
+                if r > res:
+                    road.append(best_choice)
+                    best_path = road
+                    res = r
+            predict_data[(u,traj_id)] = (current_status,best_path[-1])
+            f.write('entity_id: ' + str(u) + ' traj_id: ' + str(traj_id) + ' 路径为: .{} '.format(best_path))
+            f.write('\n')
+            f2.write(str(u) + ' ' + str(traj_id) + ' ' + str(best_path[-1]) + '\n')
+        f2.close()
+    f.close()
+
+print("finish predict")
+
+
+
+
+
+# --------------------------------------------开始面向过程-----------------------------------------
+# 根据road_id找坐标和distance
+    
+# 处理road.csv中的坐标输入
+def str2Coordinates(input):
+    input = input.replace('[',' ')
+    input = input.replace(']',' ')
+    input = input.replace(',',' ')
+    str = input.split()
+    result = []
+    for i in range(0,len(str),2):
+        x = float(str[i])
+        y = float(str[i + 1])
+        result.append((x,y))
+    return result
+
+def parseCooridinate(input):
+    input = input.replace('[',' ')
+    input = input.replace(']',' ')
+    input = input.replace(',',' ')
+    str = input.split()
+    x = float(str[0])
+    y = float(str[1])
+    return (x,y)
+
+
+# 计算“距离”
+def calDis(c1,c2):
+    x1,y1 = c1
+    x2,y2 = c2
+    return (x1-x2)*(x1-x2) + (y1-y2)*(y1-y2)
+
+# 返回两条线段的交点 c1-c2 c3-c4
+def getCross(c1,c2,c3,c4) :
+    d1_3 = calDis(c1,c3)
+    d1_4 = calDis(c1,c4)
+    d2_3 = calDis(c2,c3)
+    d2_4 = calDis(c2,c4)
+    if d1_3 < d2_3 and d1_3 < d2_4:
+        return c1
+    if d1_4 < d2_3 and d1_4 < d2_4:
+        return c1
+    return c2
+
+
+from datetime import datetime
+
+# 计算时间差,返回小时
+def time_difference(date1, date2):
+    # 将日期字符串转换为datetime对象  
+    dt1 = datetime.strptime(date1, "%Y-%m-%dT%H:%M:%SZ")
+    dt2 = datetime.strptime(date2, "%Y-%m-%dT%H:%M:%SZ")
+
+    # 计算时间差  
+    diff = dt2 - dt1
+
+    # 返回小时
+    total_hours = diff.days * 24 + diff.seconds / 3600
+    return total_hours
+
+
+# 导入road信息
+print("start load road.csv")
+road_data = {} # road_id => (coordinates,length)
+with open(cwd + '/../database/data/road.csv','r') as file :
+    csv_reader = csv.reader(file)
+    head = 0
+    for row in csv_reader:
+        if head == 0 :
+            head = 1
             continue
-        road = list(b_tm1)
-        #road.append(best_choice)
-        r = score[best_choice]
-        if r > res:
-            road.append(best_choice)
-            best_path = road
-            res = r
-    print('路径为: .{} '.format(best_path))
-    print('最佳预测为.{}'.format(best_path[-1]))
+        road_id = int(row[0])
+        coordinates = str2Coordinates(row[1])
+        length = float(row[3])
+        road_data[road_id] = (coordinates,length)
+    file.close()
+
+# 给出路段，坐标，返回到该路段剩余的距离
+# TODO 我这里摆了，把他当直线处理的
+def getRemainDis(road_id,cross,coordinate): 
+    coordinates,length = road_data[road_id]
+    # 正南正北
+    if abs(coordinates[0][0] - coordinates[-1][0]) * 1000 < 1 :
+        if abs(coordinates[0][1] - coordinates[-1][1]) * 1000 < 1 :
+            return 0
+        else :
+            return abs(length * (1000 * cross[1] - 1000 * coordinate[1]) / (1000 * coordinates[0][1] - 1000 * coordinates[-1][1]))
+    return abs(length * (1000 * cross[0] - 1000 * coordinate[0]) / (1000 * coordinates[0][0] - 1000 * coordinates[-1][0]))
+
+# 给出路段，端点坐标，距离，返回坐标
+# TODO 没考虑把road2跑完跑到road3的情况
+def getCoordinate(road_id,cross,dis):
+    coordinates,length = road_data[road_id]
+    # 找哪个点里cross远
+    c1 = coordinates[0]
+    c2 = coordinates[-1]
+    another_end = c2
+    if abs(c1[0] - cross[0]) > abs(c2[0] - cross[0]) :
+        another_end = c1
+    x = cross[0] + dis / length * (another_end[0] - cross[0])
+    y = cross[1] + dis / length * (another_end[1] - cross[1])
+    return (x,y)
+
+
+# 建立交点的坐标 
+print("start get cross_data")   
+cross_data = {}# (road_id,road_id) => cross
+for i in range(n_road + 1):
+    list = allowed_trans[i]
+    for j in list :
+        if j == i:
+            continue
+        coordinates_i,_ = road_data[i]
+        coordinates_j,_ = road_data[j]
+        cross = getCross(coordinates_i[0],coordinates_i[-1],coordinates_j[0],coordinates_j[-1])
+        cross_data[(i,j)] = cross
+
+# 开始读入jump_task.csv
+print("start read jump_task.csv")
+jump_task_data = []
+with open(cwd + '/../database/data/jump_task.csv','r') as file:
+    csv_reader = csv.reader(file)
+    head = 0
+    for row in csv_reader:
+        if head == 0:
+            head = 1
+            continue
+        time = row[1]
+        entity_id = int(row[2])
+        traj_id = int(row[3])
+        if (row[4] == ''):
+            coordinate = None
+        else :
+            coordinate = parseCooridinate(row[4])
+        if (row[5] == ''):
+            current_distance = None
+        else :
+            current_distance = float(row[5])
+        speeds = float(row[6])
+        jump_task_data.append((time,entity_id,traj_id,coordinate,current_distance,speeds))
+    file.close()
+
+# 检测current_distance是否为None，是则开始计算
+print("start calculate distance and coordinate")
+with open('jump_task.csv',"w") as file :
+    for i in range(len(jump_task_data)):
+        t2,entity_id,traj_id,coordinate2,current_distance2,speeds2 = jump_task_data[i]
+        if coordinate2 == None:
+            t1,_,_,coordinate1,current_distance1,speeds1 = jump_task_data[i - 1]
+            delta_t = time_difference(t1,t2)
+            # 有可能出现fmm_jump匹配失败无法预测
+            if (entity_id,traj_id) not in predict_data.keys() :
+                current_distance2 = 114514
+                coordinate2 = (114514,114514)
+            else :
+                road_id1,road_id2 = predict_data[(entity_id,traj_id)]
+                if road_id1 == road_id2 : # TODO 毒瘤情况
+                    current_distance2 = 114514
+                    coordinate2 = (114514,114514)
+                else :
+                    cross = cross_data[(road_id1,road_id2)]
+                    # TODO 此处粗略的按照speed1跑road1，如有更高的精度请修改
+                    remainDis = getRemainDis(road_id1,cross,coordinate1)
+                    t4road1 = remainDis / speeds1
+                    if t4road1 < delta_t : # 说明开到road2上了
+                        print("change")
+                        # TODO 此时粗略的按照speed2跑road2，如有更高精度请修改
+                        dis4road2 = speeds2 * (delta_t - t4road1)
+                        coordinate2 = getCoordinate(road_id2,cross,dis4road2)
+                        current_distance2 = current_distance1 + remainDis + dis4road2
+                    else : # 说明没时间把road1开完
+                        print("remain")
+                        # TODO 此处粗略的按照speed1跑road1，如有更高精度请修改
+                        #计算距离cross的距离
+                        d = remainDis - speeds1 * delta_t
+                        coordinate2 = getCoordinate(road_id1,cross,d)
+                        current_distance2 = current_distance1 + speeds1 * delta_t
+
+                
+            
+        # 将结果写入jump_task.csv
+        # TODO 这里没写回原文件,写在当前目录下的jump_task.csv中
+        file.write("{},{},{},[{};{}],{},{}\n".format(t2,entity_id,traj_id,coordinate2[0],coordinate2[1],current_distance2,speeds2))
+    file.close
+            
+
+        
+            
+
+
+            
+
+            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
         
         

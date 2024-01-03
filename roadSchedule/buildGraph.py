@@ -2,11 +2,10 @@ import pandas as pd
 import networkx as nx
 import os
 import ast
-from rtree import index
 import numpy as np
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
-from .path import *
+from path import *
 from Graph import *
 
 
@@ -32,7 +31,7 @@ def main():
     global noPath
     buildGraph(graphPath)
 
-    result_df = pd.read_csv(os.path.join(script_dir, 'data', 'result_eta_task.csv'))
+    result_df = pd.read_csv(os.path.join(script_dir, 'database/data', 'result_eta_task.csv'))
     from_coordinates = result_df['from'].apply(lambda x: ast.literal_eval(x) if pd.notnull(x) else None)
     to_coordinates = result_df['to'].apply(lambda x: ast.literal_eval(x) if pd.notnull(x) else None)
 
@@ -54,7 +53,8 @@ def main():
     print(f"No path found for {noPath} cases.")
 
     result_df = pd.DataFrame(result_data)
-    result_df.to_csv(os.path.join(script_dir, 'data', 'eta_task_schedule.csv'), index=False)
+    sorted_result_df = result_df.sort_values('t')
+    sorted_result_df.to_csv(os.path.join(script_dir, 'database/data', 'eta_task_schedule.csv'), index=False)
 
 if __name__ == "__main__":
     main()

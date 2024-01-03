@@ -10,16 +10,14 @@ df = pd.read_csv(os.path.join(script_dir, 'database', 'data', 'road.csv'))
 d = {}
 
 def buildGraph(graph_path):
-    if os.path.exists(graph_path):
-        return
     G = nx.DiGraph()
     for index, row in df.iterrows():
         coordinates = eval(row['coordinates'])
-        for i in range(len(coordinates) - 1):
-            point1, point2 = coordinates[i], coordinates[i + 1]
-            distance = row['length'] / (len(coordinates) - 1)
-            G.add_edge(tuple(point1), tuple(point2), length=distance)
+        point1, point2 = coordinates[0], coordinates[len(coordinates) - 1]
+        distance = row['length']
+        G.add_edge(tuple(point1), tuple(point2), length=distance)
     nx.write_gpickle(G, graph_path)
+    print('finish build graph')
 
 def getGraph(graph_path):
     if os.path.exists(graph_path):
@@ -51,15 +49,13 @@ def Dijkstra(from_x, from_y, to_x, to_y):
 coordinate_to_road_id = {}
 for index, row in df.iterrows():
     coordinates = np.array(eval(row['coordinates']))
-    for i in range(len(coordinates) - 1):
-        point1, point2 = coordinates[i], coordinates[i + 1]
-        key = (point1[0], point1[1], point2[0], point2[1])
-        coordinate_to_road_id[key] = row['id']
-        d[key] = row['id']
+    point1, point2 = coordinates[0], coordinates[len(coordinates) - 1]
+    key = (point1[0], point1[1], point2[0], point2[1])
+    d[key] = row['id']
 
 def getRoadID(from_x, from_y, to_x, to_y):
     key = (from_x, from_y, to_x, to_y)
-    return coordinate_to_road_id.get(key, -1)
+    return d.get(key, -1)
 
 def getOriginRoadId(from_x, from_y, to_x, to_y):
     key = (from_x, from_y, to_x, to_y)
