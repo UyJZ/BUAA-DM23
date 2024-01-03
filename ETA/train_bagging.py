@@ -11,21 +11,21 @@ import time
 import signal
 
 from Dataset import TrajDatasetNoGraph, RoadFeatures
-from GRU import GRUmodel, SimpleGRU, GRUBoosting, GRUBagging
+from GRU import GRUmodel, SimpleGRU, GRUBoosting, SimpleGRUBagging
 from Utils import *
 
 stopped = False
 
 is_training = False
 #nbags = 8
-nbags = 6   # 筛选出来6个
+nbags = 7   # 筛选出来7个
 
-trajSet = TrajDatasetNoGraph("ETA/traj_data_eval.pkl", 8, nbags) if is_training else TrajDatasetNoGraph("ETA/traj_data_eval.pkl", 8)
+trajSet = TrajDatasetNoGraph("ETA/traj_data_train.pkl", 8, nbags) if is_training else TrajDatasetNoGraph("ETA/traj_data_train.pkl", 8, hour_holiday="ETA/traj_hour_holiday_train.pkl")
 rawroadfeat = RoadFeatures("ETA/road_features_with_lengths.pkl", "database/data/road.csv")
-base_bagging_dir = "ETA/GRUBagging"
+base_bagging_dir = "ETA/GRUBagging1"
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-GRUs = GRUBagging(rawroadfeat.n_features, device, nbags, is_training=is_training, params_path=base_bagging_dir)
+GRUs = SimpleGRUBagging(rawroadfeat.n_features, device, nbags, is_training=is_training, params_path=base_bagging_dir)
 
 
 if is_training:
@@ -34,8 +34,10 @@ if is_training:
     num_epoch = 20
     log_dir = os.path.join(base_bagging_dir, "losslog")
     torch.manual_seed(5017)
-    with open("ETA/traj_restime_train.pkl", "rb") as f:
-        label_restimes = torch.from_numpy(pickle.load(f)).to(device)
+    with open("ETA/traj_res_train_1.pkl", "rb") as f:
+        label_restimes = pickle.load(f)
+        if type(label_restimes) == np.ndarray:
+            label_restimes = torch.from_numpy(pickle.load(f)).to(device)
     summary = SummaryWriter(log_dir)
 
     for K in range(nbags):
@@ -61,7 +63,7 @@ if is_training:
 
 else:
     fundGRU = GRUmodel(rawroadfeat.n_features, 128, device).eval().to(device)
-    fundGRU.load_state_dict(torch.load("ETA/GRUonly_result/rawfeature_reg_gru.pt"))
+    fundGRU.load_state_dict(torch.load("ETA/GRUonly_result/with_hour_holiday_only_time_loss.pt"))
     ret1 = predict_all_trajs(trajSet, fundGRU, rawroadfeat).detach().cpu().numpy()
 
     ret2 = predict_all_trajs(trajSet, GRUs, rawroadfeat).detach().cpu().numpy()

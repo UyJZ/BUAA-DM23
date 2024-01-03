@@ -19,7 +19,7 @@ class GRUmodel(nn.Module):
     最后的隐藏状态也通过这个神经网络，与轨迹的末尾速度作一个正则化..? \\
     暂时不考虑路口的延迟.
     '''
-    def __init__(self, input_dim, hidden_dim, device, dropout=0.0, learnable_init_hidden_code=False) -> None:
+    def __init__(self, input_dim, hidden_dim, device, dropout=0.0, learnable_init_hidden_code=False, n_hidden_hour=60, n_hidden_holiday=8, n_hidden_speeds=60) -> None:
         super().__init__()
         self.gru = nn.GRU(input_dim, hidden_dim, dropout = dropout).to(device)
         self.linear = nn.Linear(hidden_dim, hidden_dim//2).to(device)
@@ -27,6 +27,10 @@ class GRUmodel(nn.Module):
         self.device = device
 
         self.hidden_size = hidden_dim
+
+        self.n_hidden_hour = n_hidden_hour
+        self.n_hidden_holiday = n_hidden_holiday
+        self.n_hidden_speeds = n_hidden_speeds
 
         # orthogonal_初始化
         orthogonal_(self.gru.weight_ih_l0, gain=2)
@@ -67,7 +71,7 @@ class GRUmodel(nn.Module):
         return speeds[:-1,:,:], speeds[-1,:,:]
     
 
-    def predict(self, road_ids, start_end_points, start_speed, rawroadfeat:RoadFeatures):
+    def predict(self, road_ids, start_end_points, start_speed, rawroadfeat:RoadFeatures, hour=None, holiday=None):
         '''
         road_ids: list. 其他start_end_points, start_speed都是numpy.ndarray.  \\
         返回：预测出来的时间，(batchsize,), tensor.
@@ -80,6 +84,10 @@ class GRUmodel(nn.Module):
             
             if self.learn_h0:
                 h0 = start_speed.unsqueeze(0).unsqueeze(2)
+            elif hour is not None and holiday is not None:
+                hour = torch.FloatTensor(hour).to(self.device)
+                holiday = torch.FloatTensor(holiday).to(self.device)
+                h0 = prepare_input(hour, holiday, start_speed, self.n_hidden_hour, self.n_hidden_holiday, self.n_hidden_speeds)
             else:
                 h0 = get_positional_encoding(start_speed, self.hidden_size)   # (batchsize, hiddensize)
                 h0[:,0] = start_speed
@@ -92,6 +100,87 @@ class GRUmodel(nn.Module):
             times = torch.sum(road_lengths_sequence / (mean_speed_per_road + 1e-6), dim=0).squeeze()    # 这样得到的应该是 (T,)
         return times
     
+    def predict_speed(self, road_ids, start_speed, rawroadfeat:RoadFeatures, hour=None, holiday=None):
+        with torch.no_grad():
+            feat_sequence, sequence_lengths = prepare_sequential_packed_features(rawroadfeat, road_ids)
+            feat_sequence = feat_sequence.to(self.device)
+            start_speed = torch.FloatTensor(start_speed).to(self.device) * 1000 / 60   # 一维. (batchsize,), 换算成m/min
+            #final_speed = torch.FloatTensor(final_speed).to(device) * 1000 / 60
+            
+            if self.learn_h0:
+                h0 = start_speed.unsqueeze(0).unsqueeze(2)
+            elif hour is not None and holiday is not None:
+                hour = torch.FloatTensor(hour).to(self.device)
+                holiday = torch.FloatTensor(holiday).to(self.device)
+                h0 = prepare_input(hour, holiday, start_speed, self.n_hidden_hour, self.n_hidden_holiday, self.n_hidden_speeds)
+            else:
+                h0 = get_positional_encoding(start_speed, self.hidden_size)   # (batchsize, hiddensize)
+                h0[:,0] = start_speed
+                h0.unsqueeze_(0)
+            mean_speed_per_road, _ = self.forward(feat_sequence, h0)  # mean_speed: (L,T,1), final_speed: (T,1)
+
+        return mean_speed_per_road.squeeze()  # (L,T)
+
+
+class GRUmodelBagging(nn.Module):
+    def __init__(self, input_dim, device, n_bagging, dropout=0.0, is_training = False, params_path:str = None) -> None:
+        super().__init__()
+        self.GRUs = [GRUmodel(input_dim, 128, device).to(device) for _ in range(n_bagging)]
+        self.device = device
+        self.nbags = n_bagging
+        self.is_training = is_training
+        if not is_training:
+            pt_filename = []
+            for f in os.listdir(params_path):
+                if f.endswith('.pt'):
+                    pt_filename.append(f)
+            assert len(pt_filename) == n_bagging
+            for i in range(n_bagging):
+                self.GRUs[i].load_state_dict(torch.load(os.path.join(params_path, pt_filename[i])))
+                self.GRUs[i].eval()
+
+    def predict(self, road_ids, start_end_points, start_speed, rawroadfeat:RoadFeatures, id:int = None, hour = None, holiday = None):
+        if self.is_training:
+            return self.GRUs[id].predict(road_ids, start_end_points, start_speed, rawroadfeat, hour, holiday)
+        else:
+            t = [gru.predict(road_ids, start_end_points, start_speed, rawroadfeat, hour, holiday).unsqueeze(0) for gru in self.GRUs]
+            t = torch.concat(t, 0)
+            return torch.sum(t, dim=0) / self.nbags
+        
+
+class GRUmodelBoosting(nn.Module):
+    def __init__(self, input_dim, device, n_boosting, dropout = 0.0, params_path:str="ETA/newBoosting/") -> None:
+        super().__init__()
+        self.GRUs = [GRUmodel(input_dim, 128, device, dropout=dropout).to(device) for _ in range(n_boosting)]
+        self.device = device
+        self.nboost = n_boosting
+        
+        pts = []
+        for fname in os.listdir(params_path):
+            if fname.endswith(".pt"):
+                pts.append(fname)
+        assert len(pts) == self.nboost
+        pts.sort()
+        for i in range(n_boosting):
+            self.GRUs[i].load_state_dict(torch.load(os.path.join(params_path, pts[i])))
+            self.GRUs[i].eval()
+        with open(os.path.join(params_path, "alpha.pkl"), "rb") as f:
+            self.alpha = torch.from_numpy(pickle.load(f)).to(device).unsqueeze(1)
+
+    def predict(self, road_ids, start_end_points, start_speed, rawroadfeat:RoadFeatures, hour=None, holiday=None):
+        with torch.no_grad():
+            rets = [gru.predict(road_ids, start_end_points, start_speed, rawroadfeat, hour, holiday).unsqueeze(0) for gru in self.GRUs]  #[(1, batchsize,)]
+            rets = torch.cat(rets, dim=0) * self.alpha #(n_boosting, batchsize)
+            rets = torch.sum(rets, dim=0)
+        return rets
+    
+    def predict_speed(self, road_ids, start_speed, rawroadfeat:RoadFeatures, hour=None, holiday=None):
+        with torch.no_grad():
+            speeds = [gru.predict_speed(road_ids, start_speed, rawroadfeat, hour, holiday).unsqueeze(0) for gru in self.GRUs]
+            speeds = torch.cat(speeds, dim=0) * self.alpha
+            speeds = torch.sum(speeds, dim=0)
+        return speeds  # (L,T)
+
 
 class SimpleGRU(nn.Module):
     '''
@@ -255,7 +344,7 @@ class GRUBoosting:
 
 
 
-class GRUBagging(nn.Module):
+class SimpleGRUBagging(nn.Module):
     def __init__(self, input_dim, device, n_bagging, dropout=0.0, is_training = False, params_path:str = None) -> None:
         super().__init__()
         self.GRUs = [SimpleGRU(input_dim, device, dropout).to(device) for _ in range(n_bagging)]  # 这里就已经有初始化了

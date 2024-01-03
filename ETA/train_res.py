@@ -26,12 +26,12 @@ max_grad_norm = 1
 num_epoch = 500
 log_dir = "ETA/GRUres_result/losslog"
 param_path = "ETA/GRUres_result/param.pt"
-gru_param_path = "ETA/GRUonly_result/rawfeature_reg_gru.pt"
+gru_param_path = "ETA/GRUonly_result/with_hour_holiday_only_time_loss.pt"
 learnable_init_hidden = False
 torch.manual_seed(5017)
 
 # 先用之前的gru计算一次.
-gru = GRUmodel(rawroadfeat.n_features, hidden_size, learnable_init_hidden_code=learnable_init_hidden).to(device)
+gru = GRUmodel(rawroadfeat.n_features, hidden_size, device=device, learnable_init_hidden_code=learnable_init_hidden).to(device)
 gru.load_state_dict(torch.load(gru_param_path))
 gru.eval()
 res = torch.zeros((len(trajSet)), dtype=torch.float32).to(device)
@@ -61,6 +61,8 @@ with torch.no_grad():   # 这一大串应该包装成函数..
         res[t:t+start_speed.shape[0]] = label_times - times
         t += start_speed.shape[0]
 print("precompute res, done.")
+# with open("ETA/traj_res_train_1.pkl", "wb") as f:
+#     pickle.dump(res, f)
 del gru
 
 

@@ -11,7 +11,7 @@ class TrajDatasetNoGraph(Dataset):
     '''
     暂时不考虑GNN的Traj数据集，路段的编码暂时直接用原始编码.
     '''
-    def __init__(self, path, minibatchsize, n_bootstraps:int = None) -> None:
+    def __init__(self, path, minibatchsize, n_bootstraps:int = None, hour_holiday:str = None) -> None:
         super().__init__()
         with open(path, "rb") as f:
             self.traj_data = pickle.load(f)  # a list of tuple
@@ -25,6 +25,13 @@ class TrajDatasetNoGraph(Dataset):
 
         if n_bootstraps is not None:
             self.bootstrap_samples = [np.random.choice(self.size, self.size) for _ in range(n_bootstraps)]   # 这里存放的是indices
+
+        self.hour_holiday = hour_holiday is not None
+        if hour_holiday is not None:
+            with open(hour_holiday, "rb") as f:
+                hh = pickle.load(f)
+            self.hour = hh[:,0]
+            self.holiday = hh[:,1]
             
         
     def __len__(self):
@@ -53,10 +60,18 @@ class TrajDatasetNoGraph(Dataset):
             start_speed = self.start_speed[indices]
             final_speed = self.final_speed[indices]
             road_ids = [self.traj_road_ids[i] for i in indices]
-            if need_indices:
-                yield indices, first_last_point, road_ids, times, start_speed, final_speed
+            if not self.hour_holiday:
+                if need_indices:
+                    yield indices, first_last_point, road_ids, times, start_speed, final_speed
+                else:
+                    yield first_last_point, road_ids, times, start_speed, final_speed
             else:
-                yield first_last_point, road_ids, times, start_speed, final_speed
+                hour = self.hour[indices]
+                holiday = self.holiday[indices]
+                if need_indices:
+                    yield indices, first_last_point, road_ids, times, start_speed, final_speed, hour, holiday
+                else:
+                    yield first_last_point, road_ids, times, start_speed, final_speed, hour, holiday
 
     def iter_traj_by_order(self, num_trajs_each_iter):
         i = 0
@@ -68,7 +83,12 @@ class TrajDatasetNoGraph(Dataset):
             final_speed = self.final_speed[indices]
             road_ids = [self.traj_road_ids[i] for i in indices]
             i += num_trajs_each_iter
-            yield first_last_point, road_ids, times, start_speed, final_speed
+            if not self.hour_holiday:
+                yield first_last_point, road_ids, times, start_speed, final_speed
+            else:
+                hour = self.hour[indices]
+                holiday = self.holiday[indices]
+                yield first_last_point, road_ids, times, start_speed, final_speed, hour, holiday
     
     def __getitem__(self, index):
         '''
