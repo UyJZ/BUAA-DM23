@@ -1,0 +1,3 @@
+model: ETA/GRU.py, GRUmodelBoosting
+parameters: ETA/newBoosting.
+9 GRUs used for boosting.

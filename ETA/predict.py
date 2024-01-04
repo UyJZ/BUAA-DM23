@@ -10,7 +10,7 @@ from torch.utils.tensorboard import SummaryWriter
 import time
 
 from Dataset import TrajDatasetNoGraph, RoadFeatures
-from GRU import GRUmodelBoosting
+from GRU import GRUmodelBoosting, GRUmodelBagging
 from Utils import *
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -19,8 +19,10 @@ trajSet = TrajDatasetNoGraph("ETA/traj_data_test.pkl", 8, hour_holiday="ETA/traj
 rawroadfeat = RoadFeatures("ETA/road_features_with_lengths.pkl", "database/data/road.csv")
 
 base_dir = "ETA/newBoosting/"
+#base_dir = "ETA/GRUBagging1"
 
 model = GRUmodelBoosting(rawroadfeat.n_features, device, 9, params_path=base_dir).to(device)
+#model = GRUmodelBagging(rawroadfeat.n_features, device, 8, params_path=base_dir).to(device)
 
 ret = (predict_all_trajs(trajSet, model, rawroadfeat)).detach().cpu().numpy()
 df = pd.DataFrame(ret, columns=["real time", "predict"])

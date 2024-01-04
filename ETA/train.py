@@ -15,19 +15,23 @@ from Utils import *
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
+#trajSet = TrajDatasetNoGraph("ETA/traj_data_train.pkl", 8, n_bootstraps=8)
 trajSet = TrajDatasetNoGraph("ETA/traj_data_train.pkl", 8)
 rawroadfeat = RoadFeatures("ETA/road_features_with_lengths.pkl", "database/data/road.csv")
 
 layer = 8
 
-is_training = True
+is_training = False
 hidden_size = 128
 lr = 5e-5
 max_grad_norm = 1
 # log_dir = "ETA/GRUonly_result/losslog"
 # param_path = "ETA/GRUonly_result/with_hour_holiday_only_time_loss.pt"
-log_dir = "ETA/newBoosting/losslog"
-param_path = "ETA/newBoosting/param{}.pt".format(layer)
+#basedir = "ETA/GRUBagging1"
+basedir = "ETA/newBoosting"
+log_dir = os.path.join(basedir, "losslog")
+param_path = os.path.join(basedir, "param{}.pt".format(layer))
+#param_path = "ETA/newBoosting/param{}.pt".format(layer)
 learnable_init_hidden = False
 #torch.manual_seed(5017)
 
@@ -36,7 +40,7 @@ with open("ETA/traj_hour_holiday_train.pkl", "rb") as f:
 hour_holiday = torch.from_numpy(hour_holiday).to(device)
 with open("ETA/newBoosting/weight{}.pkl".format(layer), "rb") as f:
     weight = pickle.load(f)
-weight = torch.from_numpy(weight).to(device)
+weight = torch.from_numpy(weight).to(device)   #这是给boosting用的.
 n_hidden_hour = 60
 n_hidden_holiday = 8
 n_hidden_speeds = 60
@@ -54,15 +58,15 @@ if is_training:
 
     num_epoch = 20
     global_steps = 0
-    epoches_per_save = 2
+    epoches_per_save = 1
     epoches_before_save = 0
-    steps_per_print = 200
+    steps_per_print = 100
     steps_before_print = 0
 
     for e in range(num_epoch):
         print("epoch {}".format(e))
         epoch_start_time = time.time()
-        for idx, traj_info, road_ids, duration, start_speed, final_speed in trajSet.batch_generator(need_indices=True):
+        for idx, traj_info, road_ids, duration, start_speed, final_speed in trajSet.batch_generator(need_indices=True, bootstrap_id=layer):
             feat_sequence, sequence_lengths = prepare_sequential_packed_features(rawroadfeat, road_ids)
             feat_sequence = feat_sequence.to(device)
             start_speed = torch.FloatTensor(start_speed).to(device) * 1000 / 60   # 一维. (batchsize,), 换算成m/min
@@ -94,6 +98,7 @@ if is_training:
             label_times = torch.FloatTensor(duration).to(device)
             #print(times.dtype, label_times.dtype, predicted_final_speed.dtype, final_speed.dtype)
             loss_times = F.mse_loss(times * weight[idx], label_times * weight[idx])
+            #loss_times = F.mse_loss(times, label_times)
             #loss_finalspeed = F.mse_loss(predicted_final_speed.squeeze(), final_speed)
             # 记录loss_times, loss_finalspeed...
             summary.add_scalar("Loss of Time", loss_times, global_steps)
@@ -170,4 +175,4 @@ else:
 
     # 保存ret_table.
     df = pd.DataFrame(ret_table,columns=["label time", "predicted time"])
-    df.to_csv("ETA/newBoosting/ret_of_layer{}.csv".format(layer), sep=',', index=False)
+    df.to_csv(os.path.join(basedir,"ret_of_layer{}.csv".format(layer)), sep=',', index=False)

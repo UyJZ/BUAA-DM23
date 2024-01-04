@@ -145,6 +145,7 @@ class GRUmodelBagging(nn.Module):
         else:
             t = [gru.predict(road_ids, start_end_points, start_speed, rawroadfeat, hour, holiday).unsqueeze(0) for gru in self.GRUs]
             t = torch.concat(t, 0)
+            # 筛选一下，小于1和大于1000的不要. 但有些全都没学出来的...还是不行.
             return torch.sum(t, dim=0) / self.nbags
         
 
@@ -175,6 +176,9 @@ class GRUmodelBoosting(nn.Module):
         return rets
     
     def predict_speed(self, road_ids, start_speed, rawroadfeat:RoadFeatures, hour=None, holiday=None):
+        '''
+        直接把所有网络预测的速度平均了..
+        '''
         with torch.no_grad():
             speeds = [gru.predict_speed(road_ids, start_speed, rawroadfeat, hour, holiday).unsqueeze(0) for gru in self.GRUs]
             speeds = torch.cat(speeds, dim=0) * self.alpha

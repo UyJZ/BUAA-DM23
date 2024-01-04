@@ -163,6 +163,8 @@ class ETATaskData(Dataset):
         self.size = len(task_df) // 2
         start_info_df = task_df[task_df.index%2==0]  # 只保留起点那一行. 但是没有matched point.
         self.start_speeds = np.array(start_info_df['speeds'], dtype=np.float32)
+        self.hour = np.array(list(map(lambda x: float(x[11:13]),start_info_df['time'])), dtype=np.float32)
+        self.holiday = np.array(start_info_df['holidays'], dtype=np.float32)
         #end_info_df = task_df[task_df.index%2==1]    # 终点那一行.
         
         self.minibatchsize = minibatchsize
@@ -170,7 +172,7 @@ class ETATaskData(Dataset):
     def __len__(self):
         return self.size
 
-    def iter_by_order(self):
+    def iter_by_order(self, hour_holiday = False):
         i = 0
         while i < self.size:
             indices = []
@@ -186,6 +188,9 @@ class ETATaskData(Dataset):
                 tids = self.tids[indices]
                 start_end_points = self.start_end_matched_points[indices]
                 start_speeds = self.start_speeds[indices]
-                yield tids, roadids, tids, start_end_points, start_speeds
+                if hour_holiday:
+                    yield tids, roadids, tids, start_end_points, start_speeds, self.hour[indices], self.holiday[indices]
+                else:
+                    yield tids, roadids, tids, start_end_points, start_speeds
             else:
                 break
