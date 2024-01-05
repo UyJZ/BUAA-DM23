@@ -1,0 +1,85 @@
+﻿
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="initial-scale=1.0, user-scalable=no, width=device-width">
+  <title>HELLO，AMAP!</title>
+  <link rel="stylesheet" href="https://a.amap.com/jsapi_demos/static/demo-center/css/demo-center.css" />
+  <style>
+    html,
+    body,
+    #container {
+      height: 100%;
+      width: 100%;
+    }
+
+    .amap-icon img,
+    .amap-marker-content img {
+      width: 25px;
+      height: 34px;
+    }
+
+    .cus_info_window {
+      background-color: #fff;
+      padding: 10px;
+    }
+  </style>
+</head>
+
+<body>
+  <div id="container"></div>
+  <script type="text/javascript" src="https://webapi.amap.com/maps?v=2.0&key=692a38180fd6dce577d2e206e522d8e3"></script>
+  <script type="text/javascript">
+    // 创建地图实例
+    var map = new AMap.Map("container", {
+      zoom: 13,
+      center: [116.39, 39.92],
+      resizeEnable: true
+    });
+
+    // 创建点覆盖物
+    var marker = new AMap.Marker({
+      position: new AMap.LngLat(116.39, 39.92),
+      icon: '//a.amap.com/jsapi_demos/static/demo-center/icons/poi-marker-default.png',
+      offset: new AMap.Pixel(-13, -30)
+    });
+    map.add(marker);
+
+    // 创建信息窗体
+    var infoWindow = new AMap.InfoWindow({
+      isCustom: true,  // 使用自定义窗体
+      content: '<div class="cus_info_window">HELLO,AMAP!</div>', // 信息窗体的内容可以是任意 html 片段
+      offset: new AMap.Pixel(16, -45)
+    });
+    var onMarkerClick = function (e) {
+      infoWindow.open(map, e.target.getPosition()); // 打开信息窗体
+      // e.target 就是被点击的 Marker
+    }
+
+    marker.on('click', onMarkerClick); // 绑定 click 事件
+
+    var lineArr = [[[116.467633, 39.939075], [116.4678, 39.927631], [116.468647, 39.9248], [116.47556, 39.924144], [116.475773, 39.92184]]];
+    var polyline = new AMap.Polyline({
+      path: lineArr,          // 设置线覆盖物路径
+      strokeColor: "#FF00FF", // 线颜色
+      strokeWeight: 3,        // 线宽
+      strokeStyle: "dash",   // 线样式
+    });
+    map.add(polyline);
+
+    var lineArr = [[[116.4655281, 39.9369979], [116.4643884, 39.9368991], [116.4643294, 39.9365166], [116.4640266, 39.9362842], [116.46398070000001, 39.9359613], [116.4638466, 39.9358482], [116.46225530000001, 39.9358399], [116.46206190000001, 39.9358437], [116.4619524, 39.9358419], [116.4619576, 39.9366528], [116.4619703, 39.9386071], [116.4619709, 39.9386994], [116.4619756, 39.9394261], [116.4619776, 39.9397305], [116.4619856, 39.9409547], [116.4619864, 39.9410924], [116.4619873, 39.9412306], [116.461988, 39.9413348], [116.46139980000001, 39.9413332], [116.4614001, 39.9412298], [116.46140050000001, 39.9410842], [116.4614009, 39.940960000000004], [116.461406, 39.9391859], [116.4614066, 39.9389952], [116.4614068, 39.9389082], [116.4614074, 39.9387088], [116.4614078, 39.9385868], [116.4614079, 39.9385404], [116.461399, 39.9379186], [116.4614012, 39.9366675], [116.4613977, 39.9364869], [116.4614013, 39.9349981], [116.4613928, 39.9343566], [116.46138450000001, 39.9338567], [116.46138470000001, 39.9337496], [116.46138280000001, 39.9336132], [116.46167750000001, 39.9336086], [116.4619406, 39.9336044], [116.4633469, 39.9336218], [116.4637147, 39.9336217], [116.4670557, 39.9336214], [116.4669226, 39.9335051], [116.4669253, 39.9327504], [116.4669282, 39.9319289], [116.4669366, 39.930922], [116.46694980000001, 39.9293488], [116.4669994, 39.9270054], [116.4669812, 39.926168600000004], [116.4669871, 39.9255499], [116.46697180000001, 39.9237593], [116.46696800000001, 39.9233074], [116.4669683, 39.9231919], [116.469635, 39.9231197], [116.4728834, 39.9230428], [116.4779247, 39.9228379], [116.47806940000001, 39.922832], [116.4780657, 39.9225486], [116.4780623, 39.9222881], [116.47806200000001, 39.9222667], [116.477939, 39.9222693], [116.4776058, 39.9222762], [116.4765229, 39.9222988], [116.475782869, 39.922314202]]];
+    var polyline = new AMap.Polyline({
+      path: lineArr,          // 设置线覆盖物路径
+      strokeColor: "#FF0000", // 线颜色
+      strokeWeight: 5,        // 线宽
+      strokeStyle: "dash",   // 线样式
+    });
+    map.add(polyline);
+
+  </script>
+</body>
+
+</html>

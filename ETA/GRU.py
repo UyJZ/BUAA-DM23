@@ -95,7 +95,10 @@ class GRUmodel(nn.Module):
             mean_speed_per_road, _ = self.forward(feat_sequence, h0)  # mean_speed: (L,T,1), final_speed: (T,1)
 
             # 有了路段平均速度，预测的最终速度，然后求时间
-            road_lengths_sequence = prepare_road_lengths(rawroadfeat, road_ids, start_end_points[0], start_end_points[1]).to(self.device)  # (L,T,1)
+            if start_end_points is not None:
+                road_lengths_sequence = prepare_road_lengths(rawroadfeat, road_ids, start_end_points[0], start_end_points[1]).to(self.device)  # (L,T,1)
+            else:
+                road_lengths_sequence = prepare_road_lengths(rawroadfeat, road_ids, None, None).to(self.device)
 
             times = torch.sum(road_lengths_sequence / (mean_speed_per_road + 1e-6), dim=0).squeeze()    # 这样得到的应该是 (T,)
         return times
@@ -175,14 +178,22 @@ class GRUmodelBoosting(nn.Module):
             rets = torch.sum(rets, dim=0)
         return rets
     
-    def predict_speed(self, road_ids, start_speed, rawroadfeat:RoadFeatures, hour=None, holiday=None):
+    def predict_speed(self, road_ids, start_speed, rawroadfeat:RoadFeatures, start_end_matched_points=None, hour=None, holiday=None):
         '''
-        直接把所有网络预测的速度平均了..
+        不能直接平均所有网络预测的速度，而应该求出时间之后再预测速度.
         '''
         with torch.no_grad():
-            speeds = [gru.predict_speed(road_ids, start_speed, rawroadfeat, hour, holiday).unsqueeze(0) for gru in self.GRUs]
-            speeds = torch.cat(speeds, dim=0) * self.alpha
-            speeds = torch.sum(speeds, dim=0)
+            t = self.predict(road_ids, start_end_matched_points, start_speed, rawroadfeat, hour, holiday)  # (batchsize,)
+            if start_end_matched_points is None:
+                road_lengths = prepare_road_lengths(rawroadfeat, road_ids, start_matched_point=None, final_matched_point=None).to(self.device)  # (L,batchsize,1)
+            else:
+                road_lengths = prepare_road_lengths(rawroadfeat, road_ids, start_matched_point=start_end_matched_points[0], final_matched_point=start_end_matched_points[1]).to(self.device)
+            speeds = road_lengths.squeeze() / t  # (L,T)
+            # speeds = [gru.predict_speed(road_ids, start_speed, rawroadfeat, hour, holiday).unsqueeze(0) for gru in self.GRUs]
+            # speeds = torch.cat(speeds, dim=0)
+            # #print(speeds.shape)
+            # speeds  *= self.alpha
+            # speeds = torch.sum(speeds, dim=0)
         return speeds  # (L,T)
 
 

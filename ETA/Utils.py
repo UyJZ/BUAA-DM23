@@ -58,6 +58,8 @@ def prepare_road_lengths(road_feat: RoadFeatures, road_ids: list[np.ndarray], st
                 this_sequence_lengths[0] = computeApproxDistFromCoord(start_matched_point, end_of_first_road)
                 this_sequence_lengths[-1]= computeApproxDistFromCoord(final_matched_point, start_of_last_road)
                 lengths[:l,i,0] = this_sequence_lengths
+        else:
+            lengths[:l,i,0] = road_feat.getRoadLength(ids)
     return torch.from_numpy(lengths)
 
 

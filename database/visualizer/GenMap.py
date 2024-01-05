@@ -1,5 +1,7 @@
 import csv
 import argparse
+import ast
+import pandas as pd
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--csv", type=str, default="database/data/road.csv", help="path to the csv file that contains polylines wanted")
@@ -87,6 +89,9 @@ def main():
     polyindex = args.polyline_index
     isWKT = args.wkt
     outfilepath = args.output
+
+    x_bias = 0.0061
+    y_bias = 0.0013
     
     infile = open(infilepath, "r", encoding="utf-8-sig")
     reader = csv.reader(infile)
@@ -100,9 +105,10 @@ def main():
                 first = False
                 continue
             else:
-                polyline = line[polyindex]
+                polyline = ast.literal_eval(line[polyindex])
+                polyline = list(map(lambda x: [x[0]+x_bias, x[1]+y_bias], polyline))
                 if not isWKT:
-                    polylines += polyline + ","
+                    polylines += str(polyline) + ","
 
         middle = \
 '''
@@ -116,10 +122,14 @@ def main():
     map.add(polyline);
 '''.format(polylines)     # 之后再修改颜色等等.
         outfile.write(middle)
+
+        infile.close()
+
+        infile = open("database/fmm/fmm.csv")
         
         outfile.write(after)
     
-    infile.close()
+
     
 
 if __name__=='__main__':

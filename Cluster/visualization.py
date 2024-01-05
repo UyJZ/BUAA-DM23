@@ -2,6 +2,7 @@ import csv
 import argparse
 import pickle
 import numpy as np
+import ast
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--csv", type=str, default="database/data/road.csv", help="path to the csv file that contains polylines wanted")
@@ -103,6 +104,9 @@ def main():
     isWKT = args.wkt
     outfilepath = args.output
     label_path = args.label
+
+    x_bias = 0.0061
+    y_bias = 0.0013
     
     infile = open(infilepath, "r", encoding="utf-8-sig")
     reader = csv.reader(infile)
@@ -121,11 +125,12 @@ def main():
                 first = False
                 continue
             else:
-                polyline = line[polyindex]
+                polyline = ast.literal_eval(line[polyindex])
+                polyline = list(map(lambda x: [x[0]+x_bias, x[1]+y_bias], polyline))
                 l = int(label[idx]) + 1  # 转化为从0开始.
                 idx += 1
                 if not isWKT:
-                    lineArrs[l] += polyline + ","
+                    lineArrs[l] += str(polyline) + ","
                     #polylines += polyline + ","
 
         for i in range(n_clusters):

@@ -18,12 +18,12 @@ class SpeedPredictor:
         参数已经预先写好.不用传什么东西.
         '''
         self.base_dir = "ETA/newBoosting/"
-        device = torch.device("cuda") if torch.device.is_available() else torch.device("cpu")
+        device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
         self.rawroadfeat = RoadFeatures("ETA/road_features_with_lengths.pkl", "database/data/road.csv")
         self.model = GRUmodelBoosting(self.rawroadfeat.n_features, device, 9, params_path=self.base_dir)
     
 
-    def predict_speed(self, road_ids, start_speed, hour, holiday):
+    def predict_speed(self, road_ids, start_speed, hour, holiday, start_end_matched_points):
         '''
         参数与类型解释： \\
         road_ids: 二维列表。有batchsize个元素，每个都是一个所经过的路段编号的列表, 比如，轨迹a依次经过1,2,3，轨迹b依次经过7,8, 则两者合起来为[[1,2,3],[7,8]] \\
@@ -37,4 +37,15 @@ class SpeedPredictor:
         长度不足length的轨迹，不足的部分**不一定是0**。比如，mean_speed_per_road[2,3]为batch中的第4条轨迹在其所经过的第3个路段上的平均速度。 \\
         虽然预测结果有所改进，但仍是不准的.
         '''
-        return self.model.predict_speed(road_ids, start_speed, self.rawroadfeat, hour, holiday).detach().cpu().numpy()
+        return self.model.predict_speed(road_ids, start_speed, self.rawroadfeat,start_end_matched_points, hour=hour, holiday=holiday).detach().cpu().numpy()
+    
+
+def main():
+    trajSet = TrajDatasetNoGraph("ETA/traj_data_test.pkl", 8, hour_holiday="ETA/traj_hour_holiday_test.pkl")
+    pred = SpeedPredictor()
+    for first_last_point, road_ids, times, start_speed, final_speed, hour, holiday in trajSet.iter_traj_by_order(8):
+        sp = pred.predict_speed(road_ids, start_speed, hour, holiday, first_last_point)
+        #print(sp[0])
+
+if __name__ == '__main__':
+    main()
