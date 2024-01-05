@@ -17,9 +17,9 @@ class SpeedPredictor:
         '''
         参数已经预先写好.不用传什么东西.
         '''
-        self.base_dir = "ETA/newBoosting/"
-        device = torch.device("cuda") if torch.device.is_available() else torch.device("cpu")
-        self.rawroadfeat = RoadFeatures("ETA/road_features_with_lengths.pkl", "database/data/road.csv")
+        self.base_dir = "../ETA/newBoosting/"
+        device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
+        self.rawroadfeat = RoadFeatures("../ETA/road_features_with_lengths.pkl", "../database/data/road.csv")
         self.model = GRUmodelBoosting(self.rawroadfeat.n_features, device, 9, params_path=self.base_dir)
     
 
