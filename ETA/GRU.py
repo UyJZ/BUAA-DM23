@@ -166,7 +166,7 @@ class GRUmodelBoosting(nn.Module):
         assert len(pts) == self.nboost
         pts.sort()
         for i in range(n_boosting):
-            self.GRUs[i].load_state_dict(torch.load(os.path.join(params_path, pts[i])))
+            self.GRUs[i].load_state_dict(torch.load(os.path.join(params_path, pts[i]), map_location=device))
             self.GRUs[i].eval()
         with open(os.path.join(params_path, "alpha.pkl"), "rb") as f:
             self.alpha = torch.from_numpy(pickle.load(f)).to(device).unsqueeze(1)
