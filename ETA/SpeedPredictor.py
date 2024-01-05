@@ -46,14 +46,14 @@ def main():
     p_start_speed = os.path.join(database_eta, "start_speed.npy")
     p_hour = os.path.join(database_eta, "hour.npy")
     p_holiday = os.path.join(database_eta, "holiday.npy")
+    p_first_final_matched_point = os.path.join(database_eta, "point.npy")
 
     with open(p_road_ids) as f:
         road_ids = json.load(f)
     start_speed = np.float32(np.load(p_start_speed))
     hour = np.float32(np.load(p_hour))
     holiday = np.float32(np.load(p_holiday))
-
-    print(hour)
+    first_final_matched_point = np.float32(np.load(p_first_final_matched_point))
     
     pred = SpeedPredictor()
 
@@ -66,7 +66,7 @@ def main():
     while l<total_num:
         r = l+batchsize if l+batchsize <= total_num else total_num
         idx = range(l, r)
-        speed = pred.predict_speed(road_ids[l:r], start_speed[idx], hour[idx], holiday[idx], )
+        speed = pred.predict_speed(road_ids[l:r], start_speed[idx], hour[idx], holiday[idx], first_final_matched_point[idx])
         for i in idx:
             count = len(road_ids[i])
             this_speed = speed[i-l,:count].tolist()
