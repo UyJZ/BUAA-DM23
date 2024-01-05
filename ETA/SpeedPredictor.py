@@ -41,11 +41,41 @@ class SpeedPredictor:
     
 
 def main():
-    trajSet = TrajDatasetNoGraph("ETA/traj_data_test.pkl", 8, hour_holiday="ETA/traj_hour_holiday_test.pkl")
+    database_eta = "database/ETA"
+    p_road_ids = os.path.join(database_eta, "road_ids.json")
+    p_start_speed = os.path.join(database_eta, "start_speed.npy")
+    p_hour = os.path.join(database_eta, "hour.npy")
+    p_holiday = os.path.join(database_eta, "holiday.npy")
+
+    with open(p_road_ids) as f:
+        road_ids = json.load(f)
+    start_speed = np.float32(np.load(p_start_speed))
+    hour = np.float32(np.load(p_hour))
+    holiday = np.float32(np.load(p_holiday))
+
+    print(hour)
+    
     pred = SpeedPredictor()
-    for first_last_point, road_ids, times, start_speed, final_speed, hour, holiday in trajSet.iter_traj_by_order(8):
-        sp = pred.predict_speed(road_ids, start_speed, hour, holiday, first_last_point)
-        #print(sp[0])
+
+    total_num = hour.shape[0]
+    print(total_num)
+    ret = []
+
+    l = 0
+    batchsize = 8
+    while l<total_num:
+        r = l+batchsize if l+batchsize <= total_num else total_num
+        idx = range(l, r)
+        speed = pred.predict_speed(road_ids[l:r], start_speed[idx], hour[idx], holiday[idx], )
+        for i in idx:
+            count = len(road_ids[i])
+            this_speed = speed[i-l,:count].tolist()
+            ret.append(this_speed)
+        l = r
+    print(len(ret))
+    with open(os.path.join(database_eta, "speed_for_jump.json"), "w") as f:
+        json.dump(ret, f)
+
 
 if __name__ == '__main__':
     main()
