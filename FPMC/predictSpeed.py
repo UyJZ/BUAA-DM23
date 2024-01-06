@@ -1,8 +1,14 @@
-import sys
-sys.path.append("../ETA")
-import SpeedPredictor as SP
-speedPredictor = SP.SpeedPredictor()
-mean_speed_per_road = speedPredictor.predict_speed(road_ids, start_speed, hour, holiday)
+import os
+from utils import load_jump_task_from
+from FPMC import FPMC
+import pandas as pd
+import numpy as np
+import csv
+import json
+
+cwd = os.path.dirname(os.path.realpath(__file__))
+
+mean_speed_per_road = np.load(cwd + '/../database/eta/')
 
 # 检测current_distance是否为None，是则开始计算
 print("start calculate distance and coordinate")

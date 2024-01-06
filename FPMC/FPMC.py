@@ -225,8 +225,8 @@ class FPMC():
 
         for (u, i, b_tm1, traj_id) in tqdm(data_list, desc="Evaluating", unit="tuple", leave=False):
             scores = self.compute_x_batch(u, b_tm1)
-            if i == 6777:
-                print(b_tm1)
+            #if i == 6777:
+            #    print(b_tm1)
             # ranks = np.argsort(scores)[::-1]
             rank = len(np.where(scores > scores[i])[0]) + 1
             # print(len(scores))
@@ -383,7 +383,7 @@ class FPMC():
                 print ('epoch %d done' % epoch)
 
         if eval_per_epoch == False:
-            print('evaluating~~~~')
+            # print('evaluating~~~~')
             acc_in, mrr_in, return_result = self.evaluation(tr_data)
             with open("tr.txt",'w') as f :
                 for str1 in return_result:
