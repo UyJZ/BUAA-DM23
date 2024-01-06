@@ -59,6 +59,7 @@ def main():
 
     total_num = hour.shape[0]
     print(total_num)
+    print(len(road_ids[0]))
     ret = []
 
     l = 0
@@ -66,13 +67,14 @@ def main():
     while l<total_num:
         r = l+batchsize if l+batchsize <= total_num else total_num
         idx = range(l, r)
-        speed = pred.predict_speed(road_ids[l:r], start_speed[idx], hour[idx], holiday[idx], first_final_matched_point[idx])
+        speed = pred.predict_speed(road_ids[l:r], start_speed[idx], hour[idx], holiday[idx], first_final_matched_point[idx]) #(L,T)
         for i in idx:
             count = len(road_ids[i])
-            this_speed = speed[i-l,:count].tolist()
+            this_speed = speed[:count,i-l].tolist()
             ret.append(this_speed)
         l = r
     print(len(ret))
+    print(len(ret[0]))
     with open(os.path.join(database_eta, "speed_for_jump.json"), "w") as f:
         json.dump(ret, f)
 

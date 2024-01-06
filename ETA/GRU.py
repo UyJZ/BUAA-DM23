@@ -71,37 +71,68 @@ class GRUmodel(nn.Module):
         return speeds[:-1,:,:], speeds[-1,:,:]
     
 
+    def preprocess(self, road_ids, start_end_matched_points, start_speed, rawroadfeat, hour=None, holiday = None):
+        feat_sequence, sequence_lengths = prepare_sequential_packed_features(rawroadfeat, road_ids)
+        feat_sequence = feat_sequence.to(self.device)
+        start_speed = torch.FloatTensor(start_speed).to(self.device) * 1000 / 60   # 一维. (batchsize,), 换算成m/min
+        #final_speed = torch.FloatTensor(final_speed).to(device) * 1000 / 60
+        
+        if self.learn_h0:
+            h0 = start_speed.unsqueeze(0).unsqueeze(2)
+        elif hour is not None and holiday is not None:
+            hour = torch.FloatTensor(hour).to(self.device)
+            holiday = torch.FloatTensor(holiday).to(self.device)
+            h0 = prepare_input(hour, holiday, start_speed, self.n_hidden_hour, self.n_hidden_holiday, self.n_hidden_speeds)
+        else:
+            h0 = get_positional_encoding(start_speed, self.hidden_size)   # (batchsize, hiddensize)
+            h0[:,0] = start_speed
+            h0.unsqueeze_(0)
+
+        if start_end_matched_points is not None:
+            road_lengths_sequence = prepare_road_lengths(rawroadfeat, road_ids, start_end_matched_points[0], start_end_matched_points[1]).to(self.device)  # (L,T,1)
+        else:
+            road_lengths_sequence = prepare_road_lengths(rawroadfeat, road_ids, None, None).to(self.device)
+
+        return feat_sequence, h0, road_lengths_sequence
+    
+
     def predict(self, road_ids, start_end_points, start_speed, rawroadfeat:RoadFeatures, hour=None, holiday=None):
         '''
         road_ids: list. 其他start_end_points, start_speed都是numpy.ndarray.  \\
         返回：预测出来的时间，(batchsize,), tensor.
         '''
         with torch.no_grad():
-            feat_sequence, sequence_lengths = prepare_sequential_packed_features(rawroadfeat, road_ids)
-            feat_sequence = feat_sequence.to(self.device)
-            start_speed = torch.FloatTensor(start_speed).to(self.device) * 1000 / 60   # 一维. (batchsize,), 换算成m/min
-            #final_speed = torch.FloatTensor(final_speed).to(device) * 1000 / 60
+            feat_sequence, h0, road_lengths_sequence = self.preprocess(road_ids, start_end_points, start_speed, rawroadfeat, hour, holiday)
+            # feat_sequence, sequence_lengths = prepare_sequential_packed_features(rawroadfeat, road_ids)
+            # feat_sequence = feat_sequence.to(self.device)
+            # start_speed = torch.FloatTensor(start_speed).to(self.device) * 1000 / 60   # 一维. (batchsize,), 换算成m/min
+            # #final_speed = torch.FloatTensor(final_speed).to(device) * 1000 / 60
             
-            if self.learn_h0:
-                h0 = start_speed.unsqueeze(0).unsqueeze(2)
-            elif hour is not None and holiday is not None:
-                hour = torch.FloatTensor(hour).to(self.device)
-                holiday = torch.FloatTensor(holiday).to(self.device)
-                h0 = prepare_input(hour, holiday, start_speed, self.n_hidden_hour, self.n_hidden_holiday, self.n_hidden_speeds)
-            else:
-                h0 = get_positional_encoding(start_speed, self.hidden_size)   # (batchsize, hiddensize)
-                h0[:,0] = start_speed
-                h0.unsqueeze_(0)
+            # if self.learn_h0:
+            #     h0 = start_speed.unsqueeze(0).unsqueeze(2)
+            # elif hour is not None and holiday is not None:
+            #     hour = torch.FloatTensor(hour).to(self.device)
+            #     holiday = torch.FloatTensor(holiday).to(self.device)
+            #     h0 = prepare_input(hour, holiday, start_speed, self.n_hidden_hour, self.n_hidden_holiday, self.n_hidden_speeds)
+            # else:
+            #     h0 = get_positional_encoding(start_speed, self.hidden_size)   # (batchsize, hiddensize)
+            #     h0[:,0] = start_speed
+            #     h0.unsqueeze_(0)
             mean_speed_per_road, _ = self.forward(feat_sequence, h0)  # mean_speed: (L,T,1), final_speed: (T,1)
 
             # 有了路段平均速度，预测的最终速度，然后求时间
-            if start_end_points is not None:
-                road_lengths_sequence = prepare_road_lengths(rawroadfeat, road_ids, start_end_points[0], start_end_points[1]).to(self.device)  # (L,T,1)
-            else:
-                road_lengths_sequence = prepare_road_lengths(rawroadfeat, road_ids, None, None).to(self.device)
+            # if start_end_points is not None:
+            #     road_lengths_sequence = prepare_road_lengths(rawroadfeat, road_ids, start_end_points[0], start_end_points[1]).to(self.device)  # (L,T,1)
+            # else:
+            #     road_lengths_sequence = prepare_road_lengths(rawroadfeat, road_ids, None, None).to(self.device)
 
             times = torch.sum(road_lengths_sequence / (mean_speed_per_road + 1e-6), dim=0).squeeze()    # 这样得到的应该是 (T,)
         return times
+    
+    def predict_time_per_road(self, road_ids, start_end_points, start_speed, rawroadfeat:RoadFeatures, hour=None, holiday=None):
+        feat_sequence, h0, road_lengths_sequence = self.preprocess(road_ids, start_end_points, start_speed, rawroadfeat, hour, holiday)
+        mean_speed_per_road, _ = self.forward(feat_sequence, h0)  #(L,T,1)
+        return (road_lengths_sequence / (mean_speed_per_road + 1e-6)).squeeze()   # (L,T)
     
     def predict_speed(self, road_ids, start_speed, rawroadfeat:RoadFeatures, hour=None, holiday=None):
         with torch.no_grad():
@@ -183,18 +214,26 @@ class GRUmodelBoosting(nn.Module):
         不能直接平均所有网络预测的速度，而应该求出时间之后再预测速度.
         '''
         with torch.no_grad():
-            t = self.predict(road_ids, start_end_matched_points, start_speed, rawroadfeat, hour, holiday)  # (batchsize,)
+            t = [gru.predict_time_per_road(road_ids, start_end_matched_points, start_speed, rawroadfeat, hour, holiday).unsqueeze(0) for gru in self.GRUs]  # (nboosting,L,T) 每条路上的时间.
+            t = torch.cat(t, dim=0)
+            t = torch.sum(t * self.alpha.unsqueeze(2), dim=0)   # (L, T) 每个路段上的平均时间.
             if start_end_matched_points is None:
                 road_lengths = prepare_road_lengths(rawroadfeat, road_ids, start_matched_point=None, final_matched_point=None).to(self.device)  # (L,batchsize,1)
             else:
                 road_lengths = prepare_road_lengths(rawroadfeat, road_ids, start_matched_point=start_end_matched_points[0], final_matched_point=start_end_matched_points[1]).to(self.device)
-            speeds = road_lengths.squeeze() / t  # (L,T)
-            # speeds = [gru.predict_speed(road_ids, start_speed, rawroadfeat, hour, holiday).unsqueeze(0) for gru in self.GRUs]
-            # speeds = torch.cat(speeds, dim=0)
-            # #print(speeds.shape)
-            # speeds  *= self.alpha
-            # speeds = torch.sum(speeds, dim=0)
-        return speeds  # (L,T)
+            return road_lengths.squeeze() / (t+1e-6)
+        #     t = self.predict(road_ids, start_end_matched_points, start_speed, rawroadfeat, hour, holiday)  # (batchsize,)
+        #     if start_end_matched_points is None:
+        #         road_lengths = prepare_road_lengths(rawroadfeat, road_ids, start_matched_point=None, final_matched_point=None).to(self.device)  # (L,batchsize,1)
+        #     else:
+        #         road_lengths = prepare_road_lengths(rawroadfeat, road_ids, start_matched_point=start_end_matched_points[0], final_matched_point=start_end_matched_points[1]).to(self.device)
+        #     speeds = road_lengths.squeeze() / t  # (L,T)
+        #     # speeds = [gru.predict_speed(road_ids, start_speed, rawroadfeat, hour, holiday).unsqueeze(0) for gru in self.GRUs]
+        #     # speeds = torch.cat(speeds, dim=0)
+        #     # #print(speeds.shape)
+        #     # speeds  *= self.alpha
+        #     # speeds = torch.sum(speeds, dim=0)
+        # return speeds  # (L,T)
 
 
 class SimpleGRU(nn.Module):
