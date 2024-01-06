@@ -26,3 +26,4 @@ print(first_final_matched_point)
 
 
 np.save(cwd+'/../database/ETA/point.npy', first_final_matched_point)
+print(len(first_final_matched_point))

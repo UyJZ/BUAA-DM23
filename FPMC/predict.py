@@ -37,9 +37,11 @@ for i in range(n_road + 1):
 num = len(data_list) # 预测的数量默认为data_list的总数量，想要少点的话可以自己改
 
 
-predict_data = {} # (entity_id,traj_id) => (current_status,predict_status)
+predict_data = {} # (entity_id,traj_id) => (current_status,predict_status,prev_status)
 road_ids = [] # 之后速度预测器的输入
 traj_id2idx = {} # 与road_ids配套使用 traj_id => traj_id在road_idx中的index
+ll_data = {} # (entity_id,traj_id) => 路段数
+ll = 0
 with open("predict.txt","w") as f:
     with open("predict_task.txt","w") as f2:
         for i in range(num):
@@ -65,9 +67,13 @@ with open("predict.txt","w") as f:
                     road.append(best_choice)
                     best_path = road
                     res = r
-            predict_data[(u,traj_id)] = (current_status,best_path[-1])
+            prev_status = best_path[-3]
+            predict_data[(u,traj_id)] = (current_status,best_path[-1],prev_status)
             road_ids.append(best_path)
             traj_id2idx[traj_id] = i
+            if len(best_path) > ll :
+                ll = len(best_path) 
+            ll_data[(u,traj_id)] = len(best_path)
             f.write('entity_id: ' + str(u) + ' traj_id: ' + str(traj_id) + ' 路径为: .{} '.format(best_path))
             f.write('\n')
             f2.write(str(u) + ' ' + str(traj_id) + ' ' + str(best_path[-1]) + '\n')
@@ -248,6 +254,61 @@ with open(cwd + '/../database/ETA/road_ids.json', 'w') as json_file:
 np.save(cwd + '/../database/ETA/start_speed.npy',start_speed)
 np.save(cwd + '/../database/ETA/hour.npy',hour)
 np.save(cwd + '/../database/ETA/holiday.npy',holiday)
+print(len(start_speed))
 
 # 导入速度预测器
 print('saved')
+
+with open(cwd + '/../database/ETA/speed_for_jump.json', 'r') as f:
+    mean_speed_per_road = json.load(f)
+
+
+# 检测current_distance是否为None，是则开始计算
+print("start calculate distance and coordinate")
+with open('jump_task.csv',"w") as file :
+    csv_writer = csv.writer(file)
+    csv_writer.writerow(["id","time","entity_id","traj_id","coordinates","current_dis","speeds","holidays"])
+    for i in range(len(jump_task_data)):
+        id2,t2,entity_id,traj_id,coordinate2,current_distance2,speeds2,holidays2 = jump_task_data[i]
+        if coordinate2 == None:
+            id1,t1,_,_,coordinate1,current_distance1,speeds1,holidays1 = jump_task_data[i - 1]
+            delta_t = time_difference(t1,t2)
+            # 有可能出现fmm_jump匹配失败无法预测
+            if (entity_id,traj_id) not in predict_data.keys() :
+                current_distance2 = 'fmm匹配失败'
+                coordinate2 = coordinate1
+            else :
+                road_id1,road_id2,road_id0 = predict_data[(entity_id,traj_id)]
+                if road_id1 == road_id2 : # TODO 毒瘤情况
+                    cross = cross_data[(road_id0,road_id1)]
+                    d1 = getRemainDis(road_id1,cross,coordinate1)
+                    delta_d = (speeds1 + speeds2) / 2  * delta_t
+                    current_distance2 = current_distance1 + delta_d
+                    coordinate2 = getCoordinate(road_id1,cross,d1+delta_d)
+                else :
+                    cross = cross_data[(road_id1,road_id2)]
+                    index = traj_id2idx[traj_id]
+                    lll = ll_data[(entity_id,traj_id)]
+                    # 倒数第二条路段的速度v1
+                    v1 = mean_speed_per_road[index][len(mean_speed_per_road[index]) - 2] * 60 / 1000
+                    remainDis = getRemainDis(road_id1,cross,coordinate1)
+                    t4road1 = remainDis / speeds1
+                    if t4road1 < delta_t : # 说明开到road2上了
+                        # 最后一条路段的速度v2
+                        v2 = mean_speed_per_road[index][len(mean_speed_per_road[index]) - 1] * 60 / 1000
+                        dis4road2 = speeds2 * (delta_t - t4road1)
+                        coordinate2 = getCoordinate(road_id2,cross,dis4road2)
+                        current_distance2 = current_distance1 + remainDis + dis4road2
+                    else : # 说明没时间把road1开完
+                        # 计算距离cross的距离
+                        d = remainDis - speeds1 * delta_t
+                        coordinate2 = getCoordinate(road_id1,cross,d)
+                        current_distance2 = current_distance1 + speeds1 * delta_t
+
+                
+            
+        # 将结果写入jump_task.csv
+        # 这里没写回原文件,写在当前目录下的jump_task.csv中
+        row = [id2,t2,entity_id,traj_id,"[{:.6f},{:.6f}]".format(coordinate2[0],coordinate2[1]),current_distance2,speeds2,int(holidays2)]
+        csv_writer.writerow(row)
+    file.close
